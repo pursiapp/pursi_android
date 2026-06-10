@@ -1,0 +1,50 @@
+name: Generate MML Basemap Tiles
+
+on:
+  workflow_dispatch:
+    inputs:
+      region:
+        description: 'Ladattava alue (tai "all")'
+        required: true
+        default: 'Suomenlahti-lansi'
+        type: choice
+        options:
+          - Suomenlahti-lansi
+          - Suomenlahti-ita
+          - Saaristomeri
+          - Selkameri
+          - Pohjanlahti-etela
+          - Pohjanlahti-pohjoinen
+          - Perameri
+          - Saimaa
+          - Paijanne
+          - Keitele
+          - Nasijarvi
+          - Oulujarvi
+
+permissions:
+  contents: write
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Generate tiles
+        run: python3 scripts/generate_mml_tiles.py "${{ inputs.region }}"
+        env:
+          MML_API_KEY: ${{ secrets.MML_API_KEY }}
+          PARALLEL: 5
+
+      - name: Upload to Release
+        run: |
+          TAG="mml-taustakartta"
+          if gh release view "$TAG" &>/dev/null; then
+            gh release upload "$TAG" output/*.tar.gz --clobber
+          else
+            gh release create "$TAG" output/*.tar.gz \
+              --title "MML Taustakartta" \
+              --notes "MML taustakarttatiilet (zoom 8–14). Lähde: © Maanmittauslaitos (CC BY 4.0)"
+          fi

@@ -1,0 +1,20 @@
+{
+  "providerId": "no-kartverket",
+  "displayName": "Kartverket",
+  "attribution": "Kartverket — Norwegian Charts (CC BY 4.0)",
+  "coverage": { "minLat": 56.0, "maxLat": 72.0, "minLng": 4.0, "maxLng": 32.0 },
+  "priority": 1,
+  "layers": [
+    {
+      "id": "no-sjokart",
+      "layerId": "layer-no-sjokart",
+      "name": "Sjøkart",
+      "tileUrl": "https://cache.kartverket.no/v1/wmts/1.0.0/sjokartraster/default/webmercator/{z}/{y}/{x}.png",
+      "minZoom": 4,
+      "maxZoom": 14,
+      "subdir": "no_sjokart"
+    }
+  ],
+  "supportsOfflineCache": true,
+  "needsTileServer": false
+}

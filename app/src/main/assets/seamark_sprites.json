@@ -1,0 +1,310 @@
+{
+  "berth2": {
+    "height": 60,
+    "pixelRatio": 1,
+    "width": 90,
+    "x": 180,
+    "y": 120
+  },
+  "berth3": {
+    "height": 60,
+    "pixelRatio": 1,
+    "width": 120,
+    "x": 400,
+    "y": 180
+  },
+  "berth4": {
+    "height": 60,
+    "pixelRatio": 1,
+    "width": 170,
+    "x": 400,
+    "y": 120
+  },
+  "berth5": {
+    "height": 60,
+    "pixelRatio": 1,
+    "width": 190,
+    "x": 280,
+    "y": 240
+  },
+  "calling-in_point": {
+    "height": 50,
+    "pixelRatio": 1,
+    "width": 50,
+    "x": 690,
+    "y": 60
+  },
+  "direction-arrow": {
+    "height": 15,
+    "pixelRatio": 1,
+    "width": 15,
+    "x": 364,
+    "y": 400
+  },
+  "harbour_fishing": {
+    "height": 120,
+    "pixelRatio": 1,
+    "width": 120,
+    "x": 160,
+    "y": 180
+  },
+  "harbour_generic": {
+    "height": 120,
+    "pixelRatio": 1,
+    "width": 120,
+    "x": 180,
+    "y": 0
+  },
+  "harbour_marina": {
+    "height": 120,
+    "pixelRatio": 1,
+    "width": 120,
+    "x": 280,
+    "y": 120
+  },
+  "hazard": {
+    "height": 140,
+    "pixelRatio": 1,
+    "width": 140,
+    "x": 0,
+    "y": 340
+  },
+  "line-style/anchorage": {
+    "height": 180,
+    "pixelRatio": 1,
+    "width": 180,
+    "x": 0,
+    "y": 0
+  },
+  "line-style/cable_submarine": {
+    "height": 60,
+    "pixelRatio": 1,
+    "width": 30,
+    "x": 584,
+    "y": 420
+  },
+  "line-style/pipeline_submarine": {
+    "height": 60,
+    "pixelRatio": 1,
+    "width": 30,
+    "x": 600,
+    "y": 280
+  },
+  "line-style/restricted_area": {
+    "height": 30,
+    "pixelRatio": 1,
+    "width": 30,
+    "x": 280,
+    "y": 464
+  },
+  "line-style/separation_lane": {
+    "height": 125,
+    "pixelRatio": 1,
+    "width": 40,
+    "x": 380,
+    "y": 300
+  },
+  "marine_farm": {
+    "height": 54,
+    "pixelRatio": 1,
+    "width": 54,
+    "x": 640,
+    "y": 120
+  },
+  "no_entry": {
+    "height": 64,
+    "pixelRatio": 1,
+    "width": 64,
+    "x": 280,
+    "y": 400
+  },
+  "pilot_boarding": {
+    "height": 120,
+    "pixelRatio": 1,
+    "width": 120,
+    "x": 300,
+    "y": 0
+  },
+  "placeholder": {
+    "height": 20,
+    "pixelRatio": 1,
+    "width": 20,
+    "x": 344,
+    "y": 400
+  },
+  "rescue_station": {
+    "height": 100,
+    "pixelRatio": 1,
+    "width": 100,
+    "x": 420,
+    "y": 0
+  },
+  "rock_dangerous": {
+    "height": 140,
+    "pixelRatio": 1,
+    "width": 140,
+    "x": 140,
+    "y": 340
+  },
+  "round_to_port": {
+    "height": 60,
+    "pixelRatio": 1,
+    "width": 60,
+    "x": 344,
+    "y": 425
+  },
+  "round_to_starboard": {
+    "height": 60,
+    "pixelRatio": 1,
+    "width": 60,
+    "x": 404,
+    "y": 425
+  },
+  "seaplane": {
+    "height": 100,
+    "pixelRatio": 1,
+    "width": 100,
+    "x": 520,
+    "y": 0
+  },
+  "signal_station": {
+    "height": 60,
+    "pixelRatio": 1,
+    "width": 60,
+    "x": 420,
+    "y": 300
+  },
+  "small_craft_facility/beach": {
+    "height": 60,
+    "pixelRatio": 1,
+    "width": 60,
+    "x": 470,
+    "y": 240
+  },
+  "small_craft_facility/boat_hoist": {
+    "height": 60,
+    "pixelRatio": 1,
+    "width": 60,
+    "x": 520,
+    "y": 180
+  },
+  "small_craft_facility/boat_storage": {
+    "height": 60,
+    "pixelRatio": 1,
+    "width": 60,
+    "x": 570,
+    "y": 100
+  },
+  "small_craft_facility/boatyard": {
+    "height": 60,
+    "pixelRatio": 1,
+    "width": 60,
+    "x": 420,
+    "y": 360
+  },
+  "small_craft_facility/elevator": {
+    "height": 60,
+    "pixelRatio": 1,
+    "width": 60,
+    "x": 620,
+    "y": 0
+  },
+  "small_craft_facility/ev_charger": {
+    "height": 60,
+    "pixelRatio": 1,
+    "width": 60,
+    "x": 464,
+    "y": 420
+  },
+  "small_craft_facility/fishing_spot": {
+    "height": 60,
+    "pixelRatio": 1,
+    "width": 60,
+    "x": 480,
+    "y": 300
+  },
+  "small_craft_facility/freshwater_tap": {
+    "height": 60,
+    "pixelRatio": 1,
+    "width": 60,
+    "x": 530,
+    "y": 240
+  },
+  "small_craft_facility/fuel_station": {
+    "height": 60,
+    "pixelRatio": 1,
+    "width": 60,
+    "x": 480,
+    "y": 360
+  },
+  "small_craft_facility/kayak": {
+    "height": 60,
+    "pixelRatio": 1,
+    "width": 60,
+    "x": 580,
+    "y": 160
+  },
+  "small_craft_facility/pump_out": {
+    "height": 60,
+    "pixelRatio": 1,
+    "width": 60,
+    "x": 630,
+    "y": 60
+  },
+  "small_craft_facility/slipway": {
+    "height": 60,
+    "pixelRatio": 1,
+    "width": 60,
+    "x": 680,
+    "y": 0
+  },
+  "small_craft_facility/visitor_berth": {
+    "height": 60,
+    "pixelRatio": 1,
+    "width": 60,
+    "x": 524,
+    "y": 420
+  },
+  "small_craft_facility/visitors_mooring": {
+    "height": 60,
+    "pixelRatio": 1,
+    "width": 60,
+    "x": 540,
+    "y": 300
+  },
+  "small_craft_facility/yacht_club": {
+    "height": 60,
+    "pixelRatio": 1,
+    "width": 60,
+    "x": 540,
+    "y": 360
+  },
+  "turning_basin": {
+    "height": 60,
+    "pixelRatio": 1,
+    "width": 60,
+    "x": 590,
+    "y": 220
+  },
+  "waterway_gauge": {
+    "height": 100,
+    "pixelRatio": 1,
+    "width": 100,
+    "x": 280,
+    "y": 300
+  },
+  "windsock": {
+    "height": 15,
+    "pixelRatio": 1,
+    "width": 15,
+    "x": 310,
+    "y": 464
+  },
+  "wreck_surface": {
+    "height": 160,
+    "pixelRatio": 1,
+    "width": 160,
+    "x": 0,
+    "y": 180
+  }
+}

@@ -1,0 +1,115 @@
+{
+  "version": 8,
+  "name": "Pursi Area Selection",
+  "sources": {
+    "openmaptiles": {
+      "type": "vector",
+      "url": "https://tiles.openfreemap.org/planet",
+      "attribution": "© OpenMapTiles, © OpenStreetMap contributors"
+    },
+    "openseamap": {
+      "type": "raster",
+      "tiles": [
+        "https://tiles.openseamap.org/seamark/{z}/{x}/{y}.png"
+      ],
+      "tileSize": 256,
+      "attribution": "© OpenSeaMap contributors"
+    }
+  },
+  "layers": [
+    {
+      "id": "background-water",
+      "type": "background",
+      "paint": {
+        "background-color": "#d4e7f7"
+      }
+    },
+    {
+      "id": "layer-water",
+      "type": "fill",
+      "source": "openmaptiles",
+      "source-layer": "water",
+      "paint": {
+        "fill-color": "#a0c8f0"
+      }
+    },
+    {
+      "id": "layer-ice",
+      "type": "fill",
+      "source": "openmaptiles",
+      "source-layer": "landcover",
+      "filter": ["==", "class", "ice"],
+      "paint": {
+        "fill-color": "#d4e7f7"
+      }
+    },
+    {
+      "id": "layer-landcover",
+      "type": "fill",
+      "source": "openmaptiles",
+      "source-layer": "landcover",
+      "filter": ["!=", "class", "ice"],
+      "paint": {
+        "fill-color": [
+          "match", ["get", "class"],
+          "wood", "#d4e0c8",
+          "grass", "#d8e4c8",
+          "scrub", "#d8e0c8",
+          "crop", "#e8e4d0",
+          "#e8e0d8"
+        ]
+      }
+    },
+    {
+      "id": "layer-landuse",
+      "type": "fill",
+      "source": "openmaptiles",
+      "source-layer": "landuse",
+      "paint": {
+        "fill-color": [
+          "match", ["get", "class"],
+          "residential", "#e0d8d0",
+          "industrial", "#d8d4cc",
+          "commercial", "#e0d8d0",
+          "park", "#c8d8a8",
+          "forest", "#c8d0a0",
+          "cemetery", "#c8d4b8",
+          "farmland", "#e0dcc8",
+          "military", "#d8c8c0",
+          "quarry", "#d0c8c0",
+          "#e0d8d0"
+        ]
+      }
+    },
+    {
+      "id": "layer-waterway",
+      "type": "line",
+      "source": "openmaptiles",
+      "source-layer": "waterway",
+      "paint": {
+        "line-color": "#a0c8f0",
+        "line-width": 0.5
+      }
+    },
+    {
+      "id": "layer-insert-point",
+      "type": "background",
+      "paint": {
+        "background-color": "rgba(0,0,0,0)"
+      }
+    },
+    {
+      "id": "layer-openseamap",
+      "type": "raster",
+      "source": "openseamap",
+      "minzoom": 4,
+      "maxzoom": 18,
+      "paint": {
+        "raster-opacity": 0.6
+      }
+    }
+  ],
+  "id": "pursi-area-selection-style",
+  "bearing": 0,
+  "pitch": 0
+}

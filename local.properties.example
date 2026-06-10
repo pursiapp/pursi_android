@@ -1,0 +1,9 @@
+# Umami analytics
+umami.url=https://CHANGE_ME
+umami.website.id=CHANGE_ME
+
+# Release signing (optional for local debug builds)
+signing.keystore.path=/path/to/keystore.jks
+signing.keystore.password=CHANGE_ME
+signing.key.alias=my-key
+signing.key.password=CHANGE_ME

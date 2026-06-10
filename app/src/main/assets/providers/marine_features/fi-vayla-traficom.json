@@ -1,0 +1,134 @@
+{
+  "providerId": "fi-vayla-traficom",
+  "displayName": "Väylävirasto / Traficom",
+  "coverage": { "minLat": 58.5, "maxLat": 70.5, "minLng": 19.0, "maxLng": 32.0 },
+  "priority": 2,
+  "sources": [
+    {
+      "name": "vayla_lights",
+      "displayName": "Lights & Beacons",
+      "featureType": "light",
+      "urlTemplate": "https://avoinapi.vaylapilvi.fi/vaylatiedot/ows",
+      "extraParams": { "typenames": "vesivaylatiedot:loistot_uusi" }
+    },
+    {
+      "name": "vayla_navlines",
+      "displayName": "Navigation Lines",
+      "featureType": "navigation_line",
+      "urlTemplate": "https://avoinapi.vaylapilvi.fi/vaylatiedot/ows",
+      "extraParams": { "typenames": "vesivaylatiedot:navigointilinjat_uusi" }
+    },
+    {
+      "name": "vayla_daymarks",
+      "displayName": "Daymarks",
+      "featureType": "daymark",
+      "urlTemplate": "https://avoinapi.vaylapilvi.fi/vaylatiedot/ows",
+      "extraParams": { "typenames": "vesivaylatiedot:paivatunnukset_uusi" }
+    },
+    {
+      "name": "vayla_restrictions",
+      "displayName": "Restriction Areas",
+      "featureType": "restricted_area",
+      "urlTemplate": "https://avoinapi.vaylapilvi.fi/vaylatiedot/ows",
+      "extraParams": { "typenames": "vesivaylatiedot:rajoitusalue_a_uusi" }
+    },
+    {
+      "name": "vayla_fairways_1",
+      "displayName": "Main Fairways (VL1)",
+      "featureType": "fairway",
+      "urlTemplate": "https://avoinapi.vaylapilvi.fi/vaylatiedot/ows",
+      "extraParams": { "typenames": "vesivaylatiedot:vesivaylat_vl1" }
+    },
+    {
+      "name": "vayla_fairways_2",
+      "displayName": "Secondary Fairways (VL2)",
+      "featureType": "fairway",
+      "urlTemplate": "https://avoinapi.vaylapilvi.fi/vaylatiedot/ows",
+      "extraParams": { "typenames": "vesivaylatiedot:vesivaylat_vl2" }
+    },
+    {
+      "name": "vayla_turvalaitteet",
+      "displayName": "Navigation marks (VV)",
+      "featureType": "navigation_aid",
+      "urlTemplate": "https://avoinapi.vaylapilvi.fi/vaylatiedot/ows",
+      "extraParams": { "typenames": "vesivaylatiedot:turvalaitteet_uusi" },
+      "maxFeatures": 5000
+    },
+    {
+      "name": "vayla_turvalaitteet_muut",
+      "displayName": "Navigation marks (other)",
+      "featureType": "navigation_aid",
+      "urlTemplate": "https://avoinapi.vaylapilvi.fi/vaylatiedot/ows",
+      "extraParams": { "typenames": "vesivaylatiedot:turvalaitteet_muut_vaylanpitajat" },
+      "maxFeatures": 5000
+    },
+    {
+      "name": "vayla_turvalaiteviat_kmk",
+      "displayName": "Nav mark faults (commercial)",
+      "featureType": "aton_fault",
+      "urlTemplate": "https://avoinapi.vaylapilvi.fi/vaylatiedot/ows",
+      "extraParams": { "typenames": "vesivaylatiedot:vesivaylien_turvalaiteviat_kauppamerenkulku" },
+      "maxFeatures": 500
+    },
+    {
+      "name": "vayla_turvalaiteviat_matala",
+      "displayName": "Nav mark faults (shallow)",
+      "featureType": "aton_fault",
+      "urlTemplate": "https://avoinapi.vaylapilvi.fi/vaylatiedot/ows",
+      "extraParams": { "typenames": "vesivaylatiedot:vesivaylien_turvalaiteviat_matalavaylat" },
+      "maxFeatures": 500
+    },
+    {
+      "name": "vayla_valosektorit",
+      "displayName": "Light sectors",
+      "featureType": "light_sector",
+      "urlTemplate": "https://avoinapi.vaylapilvi.fi/vaylatiedot/ows",
+      "extraParams": { "typenames": "vesivaylatiedot:valosektorit_uusi" },
+      "maxFeatures": 5000
+    },
+    {
+      "name": "vayla_vesiliikennemerkit",
+      "displayName": "Waterway signs",
+      "featureType": "notice",
+      "urlTemplate": "https://avoinapi.vaylapilvi.fi/vaylatiedot/ows",
+      "extraParams": { "typenames": "vesivaylatiedot:vesiliikennemerkit_uusi" },
+      "maxFeatures": 5000
+    },
+    {
+      "name": "traficom_soundings",
+      "displayName": "Depth soundings",
+      "featureType": "depth_sounding",
+      "urlTemplate": "https://julkinen.traficom.fi/inspirepalvelu/rajoitettu/wfs",
+      "extraParams": { "typenames": "rajoitettu:Sounding_P", "srsName": "EPSG:4326" },
+      "bboxSrs4326": false,
+      "maxFeatures": 3000
+    },
+    {
+      "name": "traficom_contours",
+      "displayName": "Depth contours",
+      "featureType": "depth_contour",
+      "urlTemplate": "https://julkinen.traficom.fi/inspirepalvelu/rajoitettu/wfs",
+      "extraParams": { "typenames": "rajoitettu:DepthContour_L", "srsName": "EPSG:4326" },
+      "bboxSrs4326": false,
+      "maxFeatures": 3000
+    },
+    {
+      "name": "traficom_depthareas",
+      "displayName": "Depth areas",
+      "featureType": "depth_area",
+      "urlTemplate": "https://julkinen.traficom.fi/inspirepalvelu/rajoitettu/wfs",
+      "extraParams": { "typenames": "rajoitettu:DepthArea_A", "srsName": "EPSG:4326" },
+      "bboxSrs4326": false,
+      "maxFeatures": 3000
+    },
+    {
+      "name": "traficom_unsurveyedarea",
+      "displayName": "Unsurveyed areas",
+      "featureType": "unsurveyed_area",
+      "urlTemplate": "https://julkinen.traficom.fi/inspirepalvelu/rajoitettu/wfs",
+      "extraParams": { "typenames": "rajoitettu:UnsurveyedArea_A", "srsName": "EPSG:4326" },
+      "bboxSrs4326": false,
+      "maxFeatures": 3000
+    }
+  ]
+}

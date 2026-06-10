@@ -1,0 +1,38 @@
+{
+  "providerId": "fi-traficom",
+  "displayName": "Traficom",
+  "attribution": "Traficom — Nautical Charts & Depth Data (CC BY 4.0) — Not for navigation",
+  "coverage": { "minLat": 58.5, "maxLat": 70.5, "minLng": 19.0, "maxLng": 32.0 },
+  "priority": 2,
+  "layers": [
+    {
+      "id": "pursi-nautical",
+      "layerId": "layer-nautical-base",
+      "name": "Merikarttasarjat",
+      "tileUrl": "https://julkinen.traficom.fi/rasteripalvelu/wmts/rest/Traficom:Merikarttasarjat%20public/default/WGS84_Pseudo-Mercator/WGS84_Pseudo-Mercator:{z}/{y}/{x}?format=image/png",
+      "minZoom": 4,
+      "maxZoom": 16,
+      "subdir": "base"
+    },
+    {
+      "id": "pursi-nautical-boating",
+      "layerId": "layer-nautical-boating",
+      "name": "Veneilykartat",
+      "tileUrl": "https://julkinen.traficom.fi/rasteripalvelu/wmts/rest/Traficom:Veneilykartat%20public/default/WGS84_Pseudo-Mercator/WGS84_Pseudo-Mercator:{z}/{y}/{x}?format=image/png",
+      "minZoom": 9,
+      "maxZoom": 16,
+      "subdir": "boating"
+    },
+    {
+      "id": "pursi-nautical-harbour",
+      "layerId": "layer-nautical-harbour",
+      "name": "Satamakartat",
+      "tileUrl": "https://julkinen.traficom.fi/rasteripalvelu/wmts/rest/Traficom:Satamakartat/default/WGS84_Pseudo-Mercator/WGS84_Pseudo-Mercator:{z}/{y}/{x}?format=image/png",
+      "minZoom": 13,
+      "maxZoom": 16,
+      "subdir": "harbour"
+    }
+  ],
+  "supportsOfflineCache": true,
+  "needsTileServer": true
+}
