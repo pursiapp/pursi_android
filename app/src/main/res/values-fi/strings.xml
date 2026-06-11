@@ -86,9 +86,9 @@
     <string name="smhi_credit">SMHI — Ruotsin säävaroitukset</string>
     <string name="data_sources_note">Kaikki data on tarkoitettu vain tilannetietoisuuteen — älä käytä navigointiin.</string>
     <string name="privacy_policy">Tietosuojaseloste</string>
-    <string name="privacy_policy_url">https://github.com/pursiapp/pursi/blob/main/PRIVACY.md</string>
+    <string name="privacy_policy_url">https://github.com/pursiapp/pursi_android/blob/main/PRIVACY.md</string>
     <string name="oss_licenses">Avoimen lähdekoodin lisenssit</string>
-    <string name="oss_licenses_url">https://github.com/pursiapp/pursi/blob/main/LICENSE</string>
+    <string name="oss_licenses_url">https://github.com/pursiapp/pursi_android/blob/main/LICENSE</string>
     <string name="keep_screen_on">Estä ruudunsäästäjä</string>
     <string name="keep_screen_on_desc">Estä näytön sammuminen sovelluksen ollessa auki</string>
     <string name="routes">Reitit</string>

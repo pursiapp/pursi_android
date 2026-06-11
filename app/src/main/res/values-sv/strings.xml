@@ -86,9 +86,9 @@
     <string name="smhi_credit">SMHI — Svenska vädervarningar</string>
     <string name="data_sources_note">All data är endast avsedd för situationsmedvetenhet — använd inte för navigering.</string>
     <string name="privacy_policy">Integritetspolicy</string>
-    <string name="privacy_policy_url">https://github.com/pursiapp/pursi/blob/main/PRIVACY.md</string>
+    <string name="privacy_policy_url">https://github.com/pursiapp/pursi_android/blob/main/PRIVACY.md</string>
     <string name="oss_licenses">Licenser för öppen källkod</string>
-    <string name="oss_licenses_url">https://github.com/pursiapp/pursi/blob/main/LICENSE</string>
+    <string name="oss_licenses_url">https://github.com/pursiapp/pursi_android/blob/main/LICENSE</string>
     <string name="keep_screen_on">Håll skärmen vaken</string>
     <string name="keep_screen_on_desc">Förhindra att skärmen stängs av medan appen är öppen</string>
     <string name="routes">Rutter</string>

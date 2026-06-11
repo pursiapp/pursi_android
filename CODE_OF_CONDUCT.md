@@ -32,7 +32,7 @@ Examples of unacceptable behavior:
 
 Community leaders are responsible for clarifying and enforcing our standards.
 Instances of abusive, harassing, or otherwise unacceptable behavior may be
-reported by opening an issue at https://github.com/pursiapp/pursi-android/issues.
+reported by opening an issue at https://github.com/pursiapp/pursi_android/issues.
 
 ## Scope
 

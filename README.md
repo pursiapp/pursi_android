@@ -85,7 +85,7 @@ Keystore location (local dev): `.keystore/release.keystore` (gitignored)
 
 ```
 pursi/
-├── app/src/main/java/fi/pursi/
+├── app/src/main/java/app/pursi/
 │   ├── MainActivity.kt
 │   ├── PursiApplication.kt
 │   ├── map/          # MapLibre views, chart layers, tile cache, geocoding
@@ -128,7 +128,7 @@ planned in the provider architecture — contributions welcome.
 Contributions, bug reports, and feature requests are welcome. The project is
 under active development and benefits from community input.
 
-See the [issue tracker](https://github.com/pursiapp/pursi-android/issues) for known
+See the [issue tracker](https://github.com/pursiapp/pursi_android/issues) for known
 issues and planned features.
 
 ---

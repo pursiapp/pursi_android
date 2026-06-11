@@ -87,9 +87,9 @@
     <string name="smhi_credit">SMHI — Swedish Warnings</string>
     <string name="data_sources_note">All data is for situational awareness only — do not use for navigation.</string>
     <string name="privacy_policy">Privacy Policy</string>
-    <string name="privacy_policy_url">https://github.com/pursiapp/pursi/blob/main/PRIVACY.md</string>
+    <string name="privacy_policy_url">https://github.com/pursiapp/pursi_android/blob/main/PRIVACY.md</string>
     <string name="oss_licenses">Open Source Licenses</string>
-    <string name="oss_licenses_url">https://github.com/pursiapp/pursi/blob/main/PRIVACY.md#third-party</string>
+    <string name="oss_licenses_url">https://github.com/pursiapp/pursi_android/blob/main/PRIVACY.md#third-party</string>
     <string name="keep_screen_on">Keep screen on</string>
     <string name="keep_screen_on_desc">Prevent screen from turning off while app is open</string>
     <string name="routes">Routes</string>

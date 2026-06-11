@@ -65,7 +65,7 @@ class MetNorwayWeatherProvider @Inject constructor(
                 "?lat=$latitude&lon=$longitude"
             val request = Request.Builder()
                 .url(url)
-                .header("User-Agent", "Pursi/1.0 (marine navigation app; https://github.com/lari/pursi)")
+                .header("User-Agent", "Pursi/1.0 (marine navigation app; https://github.com/pursiapp/pursi_android)")
                 .build()
             val response = client.newCall(request).execute()
             if (!response.isSuccessful) return@withContext emptyList()
@@ -82,7 +82,7 @@ class MetNorwayWeatherProvider @Inject constructor(
                 "?lat=$latitude&lon=$longitude"
             val request = Request.Builder()
                 .url(url)
-                .header("User-Agent", "Pursi/1.0 (marine navigation app; https://github.com/lari/pursi)")
+                .header("User-Agent", "Pursi/1.0 (marine navigation app; https://github.com/pursiapp/pursi_android)")
                 .build()
             val response = client.newCall(request).execute()
             if (!response.isSuccessful) return@withContext emptyList()

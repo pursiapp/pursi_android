@@ -62,7 +62,7 @@ Since Pursi does not collect or store personal data on any server, there is no p
 - Uninstalling the app
 
 If you have questions about this policy, please open an issue at:
-https://github.com/pursiapp/pursi-android/issues
+https://github.com/pursiapp/pursi_android/issues
 
 ## Changes to This Policy
 
@@ -70,4 +70,4 @@ Policy updates will be posted here and reflected in the app version. Continued u
 
 ---
 
-**Suomeksi:** Tietosuojaseloste löytyy osoitteesta https://github.com/pursiapp/pursi-android/blob/main/PRIVACY.md
+**Suomeksi:** Tietosuojaseloste löytyy osoitteesta https://github.com/pursiapp/pursi_android/blob/main/PRIVACY.md
