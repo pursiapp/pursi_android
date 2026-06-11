@@ -24,11 +24,11 @@ val ksPath = signingEnv["SIGNING_KEYSTORE_PATH"]
     ?: signingProps.getProperty("signing.keystore.path", "")
 
 android {
-    namespace = "fi.pursi"
+    namespace = "app.pursi"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "fi.pursi"
+        applicationId = "app.pursi"
         minSdk = 24
         targetSdk = 35
         versionCode = 1
