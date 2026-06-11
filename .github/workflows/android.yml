@@ -30,12 +30,17 @@ jobs:
       - name: Build debug APK
         run: ./gradlew assembleDebug
 
+      - name: Decode keystore
+        run: |
+          mkdir -p .keystore
+          echo "${{ secrets.SIGNING_KEYSTORE_BASE64 }}" | base64 -d > .keystore/release.keystore
+
       - name: Build release bundle
         env:
-          SIGNING_KEYSTORE_PATH: ${{ secrets.SIGNING_KEYSTORE_PATH || '' }}
-          SIGNING_KEYSTORE_PASSWORD: ${{ secrets.SIGNING_KEYSTORE_PASSWORD || '' }}
-          SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS || '' }}
-          SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD || '' }}
+          SIGNING_KEYSTORE_PATH: ${{ github.workspace }}/.keystore/release.keystore
+          SIGNING_KEYSTORE_PASSWORD: ${{ secrets.SIGNING_KEYSTORE_PASSWORD }}
+          SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
+          SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
         run: ./gradlew bundleRelease
 
       - name: Upload release bundle
