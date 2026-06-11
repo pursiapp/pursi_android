@@ -27,6 +27,7 @@ jobs:
 
       - name: Run tests
         continue-on-error: true
+        timeout-minutes: 10
         run: ./gradlew testDebug
 
       - name: Build debug APK
