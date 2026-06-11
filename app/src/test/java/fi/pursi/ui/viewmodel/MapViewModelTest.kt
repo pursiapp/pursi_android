@@ -12,6 +12,7 @@ import fi.pursi.datasource.core.SourceResolver
 import fi.pursi.location.LocationStateHolder
 import fi.pursi.location.TrackRecorder
 import fi.pursi.testutils.MainDispatcherRule
+import fi.pursi.water.WaterObservationRepository
 import fi.pursi.weather.WeatherRepository
 import io.mockk.every
 import io.mockk.mockk
@@ -41,6 +42,7 @@ class MapViewModelTest {
     private val locationStateHolder = LocationStateHolder()
     private val context = mockk<Context>(relaxed = true)
     private val aisRepository = mockk<AisRepository>(relaxed = true)
+    private val waterObservationRepository = mockk<WaterObservationRepository>(relaxed = true)
 
     private lateinit var viewModel: MapViewModel
 
@@ -48,6 +50,8 @@ class MapViewModelTest {
     fun setup() {
         every { weatherRepository.warnings } returns MutableStateFlow(emptyList())
         every { weatherRepository.lightning } returns MutableStateFlow(emptyList())
+        every { waterObservationRepository.observations } returns MutableStateFlow(emptyList())
+        every { context.filesDir } returns java.io.File(System.getProperty("java.io.tmpdir"))
         every { sourceResolver.chartProviders } returns emptySet()
 
         viewModel = MapViewModel(
@@ -61,7 +65,8 @@ class MapViewModelTest {
             sourceResolver = sourceResolver,
             weatherRepository = weatherRepository,
             locationStateHolder = locationStateHolder,
-            aisRepository = aisRepository
+            aisRepository = aisRepository,
+            waterObservationRepository = waterObservationRepository
         )
     }
 
@@ -237,7 +242,8 @@ class MapViewModelTest {
             sourceResolver = sourceResolver,
             weatherRepository = weatherRepository,
             locationStateHolder = locationStateHolder,
-            aisRepository = aisRepository
+            aisRepository = aisRepository,
+            waterObservationRepository = waterObservationRepository
         )
 
         viewModel.toggleShowLightning()
