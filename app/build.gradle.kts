@@ -8,7 +8,11 @@ plugins {
 }
 
 import java.io.FileInputStream
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import java.util.Properties
+import java.util.TimeZone
 
 val signingEnv = System.getenv()
 val signingProps = try {
@@ -33,6 +37,13 @@ android {
         targetSdk = 35
         versionCode = 1
         versionName = "0.5.0"
+
+        val buildTimestamp = SimpleDateFormat(
+            "yyyy-MM-dd HH:mm:ss z", Locale.US
+        ).apply {
+            timeZone = TimeZone.getTimeZone("UTC")
+        }.format(Date())
+        buildConfigField("String", "BUILD_TIMESTAMP", "\"$buildTimestamp\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
