@@ -51,7 +51,14 @@ class PositionSmoother(
         previousLon = location.longitude
         previousTimeMs = location.time
 
-        val effectiveAlpha = (1.0 - Math.exp(-timeDeltaS / TAU)).toFloat().coerceIn(0.1f, 1.0f)
+        val baseAlpha = (1.0 - Math.exp(-timeDeltaS / TAU)).toFloat()
+        val speedMps = if (location.hasSpeed()) location.speed else 0f
+        val speedFactor = when {
+            speedMps < SPEED_STATIONARY -> ALPHA_BOOST_FAST
+            speedMps < SPEED_SLOW      -> ALPHA_BOOST_MODERATE
+            else                       -> 1.0f
+        }
+        val effectiveAlpha = (baseAlpha * speedFactor).coerceIn(0.1f, 1.0f)
         val newSmoothedLat = effectiveAlpha * location.latitude + (1f - effectiveAlpha) * prevLat
         val newSmoothedLon = effectiveAlpha * location.longitude + (1f - effectiveAlpha) * prevLon
 
@@ -67,6 +74,10 @@ class PositionSmoother(
 
     companion object {
         private const val TAU = 3.0 // seconds — EMA time constant
+        private const val SPEED_STATIONARY = 0.08f
+        private const val SPEED_SLOW = 0.4f
+        private const val ALPHA_BOOST_FAST = 5.0f
+        private const val ALPHA_BOOST_MODERATE = 2.0f
     }
 
     fun reset() {

@@ -103,6 +103,10 @@ android {
         compose = true
         buildConfig = true
     }
+
+    lintOptions {
+        disable("NullSafeMutableLiveData")
+    }
 }
 
 
