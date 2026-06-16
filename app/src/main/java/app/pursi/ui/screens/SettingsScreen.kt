@@ -856,6 +856,12 @@ fun SettingsScreen(
                     }) {
                         Text(stringResource(R.string.oss_licenses), style = MaterialTheme.typography.bodyMedium)
                     }
+                    val bugUrl = context.getString(R.string.report_bug_url)
+                    TextButton(onClick = {
+                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(bugUrl)))
+                    }) {
+                        Text(stringResource(R.string.report_bug), style = MaterialTheme.typography.bodyMedium)
+                    }
                 }
             }
         }

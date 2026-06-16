@@ -119,6 +119,9 @@ fun MapScreen(
     }
 
     val prefs = remember { context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE) }
+    var showOnboarding by remember {
+        mutableStateOf(!prefs.getBoolean("onboarding_shown", false))
+    }
     val scope = rememberCoroutineScope()
 
     val currentTrackId by mapViewModel.trackRecorder.currentTrackId.collectAsState()
@@ -726,5 +729,15 @@ fun MapScreen(
             bottomInsetPx = bottomInsetPx,
             modifier = Modifier.align(Alignment.BottomCenter)
         )
+
+        if (showOnboarding) {
+            OnboardingOverlay(
+                onComplete = {
+                    showOnboarding = false
+                    prefs.edit().putBoolean("onboarding_shown", true).apply()
+                },
+                modifier = Modifier.fillMaxSize()
+            )
+        }
     }
 }

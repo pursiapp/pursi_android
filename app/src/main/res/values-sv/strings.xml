@@ -274,6 +274,23 @@
     <string name="offline_area_hint_two_finger">Håll med två fingrar för att rita ett område</string>
     <string name="offline_area_hint_corner">Håll i ett hörn för att justera</string>
     <string name="offline_area_hint_drag">Håll inuti området för att flytta</string>
+    <!-- Onboarding -->
+    <string name="onboarding_disclaimer_title">Pursi</string>
+    <string name="onboarding_disclaimer_text">Pursi är en sjökortsapp med öppen källkod som använder öppna datakällor. Dess information och funktioner kan innehålla fel eller brister. FÖR DIN SÄKERHET, ANVÄND DEN INTE SOM DIN ENDA SJÖKORT ELLER NAVIGERINGSVERKTYG.</string>
+    <string name="onboarding_disclaimer_accept">Jag förstår</string>
+    <string name="onboarding_permission_title">Platsbehörighet</string>
+    <string name="onboarding_permission_text">Pursi behöver platstillstånd för att visa din båt på kartan, även i bakgrunden.</string>
+    <string name="onboarding_permission_allow">Tillåt</string>
+    <string name="onboarding_permission_deny">Neka</string>
+    <string name="onboarding_tip_center">Tryck på centrera-knappen för att centrera kartan på båten</string>
+    <string name="onboarding_tip_compass">Tryck på kompassen för att växla kartans riktning mellan kurs-upp och nord-upp</string>
+    <string name="onboarding_tip_layers">Växla mellan olika kartor och se väder och andra data</string>
+    <string name="onboarding_tip_nav">Väder, rutter och inställningar finns i navigeringsmenyn</string>
+    <string name="onboarding_tip_longpress">Håll länge på kartan för att börja planera en rutt</string>
+    <string name="onboarding_close">Stäng</string>
+    <string name="report_bug">Rapportera ett fel</string>
+    <string name="report_bug_url">https://github.com/pursiapp/pursi_android/issues</string>
+
     <string name="offline_area_cancel_selection">Rensa val</string>
     <string name="offline_area_continue">Fortsätt</string>
     <string name="offline_area_tiles">rutor</string>

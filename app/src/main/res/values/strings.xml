@@ -275,6 +275,23 @@
     <string name="offline_area_hint_two_finger">Press and hold with two fingers to draw an area</string>
     <string name="offline_area_hint_corner">Press and hold a corner to adjust</string>
     <string name="offline_area_hint_drag">Press and hold inside area to move it</string>
+    <!-- Onboarding -->
+    <string name="onboarding_disclaimer_title">Pursi</string>
+    <string name="onboarding_disclaimer_text">Pursi is an open source marine chart app that uses open data sources. Its data and functionality may contain errors or omissions. FOR YOUR SAFETY, DO NOT USE IT AS YOUR SOLE CHART OR NAVIGATION TOOL.</string>
+    <string name="onboarding_disclaimer_accept">I Understand</string>
+    <string name="onboarding_permission_title">Location Permission</string>
+    <string name="onboarding_permission_text">Pursi needs location permission to show your boat on the map, even in the background.</string>
+    <string name="onboarding_permission_allow">Allow</string>
+    <string name="onboarding_permission_deny">Deny</string>
+    <string name="onboarding_tip_center">Tap the center button to center the map on your boat</string>
+    <string name="onboarding_tip_compass">Tap the compass to switch map orientation between course-up and north-up</string>
+    <string name="onboarding_tip_layers">Switch between different maps and view weather and other data layers</string>
+    <string name="onboarding_tip_nav">Weather, routes and settings are in the bottom navigation bar</string>
+    <string name="onboarding_tip_longpress">Long-press on the map to start planning a route</string>
+    <string name="onboarding_close">Close</string>
+    <string name="report_bug">Report a bug</string>
+    <string name="report_bug_url">https://github.com/pursiapp/pursi_android/issues</string>
+
     <string name="offline_area_cancel_selection">Clear selection</string>
     <string name="offline_area_continue">Continue</string>
     <string name="offline_area_tiles">tiles</string>

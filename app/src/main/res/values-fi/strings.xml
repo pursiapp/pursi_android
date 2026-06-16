@@ -274,6 +274,23 @@
     <string name="offline_area_hint_two_finger">Paina kahdella sormella pitkään piirtääksesi alueen</string>
     <string name="offline_area_hint_corner">Paina kulmasta pitkään muokataksesi</string>
     <string name="offline_area_hint_drag">Paina alueen sisällä pitkään siirtääksesi</string>
+    <!-- Onboarding -->
+    <string name="onboarding_disclaimer_title">Pursi</string>
+    <string name="onboarding_disclaimer_text">Pursi on avoimia tietolähteitä käyttävä avoimen lähdekoodin merikarttasovellus. Sen tiedoissa ja toiminnallisuuksissa voi olla virheitä tai puutteita. TURVALLISUUTESI VUOKSI ÄLÄ KÄYTÄ SITÄ AINOANA KARTTANA TAI NAVIGOINTIVÄLINEENÄ.</string>
+    <string name="onboarding_disclaimer_accept">Ymmärrän</string>
+    <string name="onboarding_permission_title">Sijaintilupa</string>
+    <string name="onboarding_permission_text">Pursi tarvitsee sijaintilupaa näyttääkseen veneesi kartalla, myös taustalla.</string>
+    <string name="onboarding_permission_allow">Salli</string>
+    <string name="onboarding_permission_deny">Älä salli</string>
+    <string name="onboarding_tip_center">Napauta keskitä-nappia keskittääksesi kartan veneeseen.</string>
+    <string name="onboarding_tip_compass">Napauttamalla kompassia voit vaihtaa kartan suunnan kulkusuunnan tai kompassisuunnan mukaiseksi</string>
+    <string name="onboarding_tip_layers">Voit vaihtaa erilaisten karttojen välillä ja nähdä kartalla sää- ja muita tietoja</string>
+    <string name="onboarding_tip_nav">Sää, reitit ja asetukset löytyvät alavalikosta</string>
+    <string name="onboarding_tip_longpress">Pitkällä painalluksella kartalle voit aloittaa reitin suunnittelun</string>
+    <string name="onboarding_close">Sulje</string>
+    <string name="report_bug">Ilmoita virheestä</string>
+    <string name="report_bug_url">https://github.com/pursiapp/pursi_android/issues</string>
+
     <string name="offline_area_cancel_selection">Peruuta valinta</string>
     <string name="offline_area_continue">Jatka</string>
     <string name="offline_area_tiles">tiiltä</string>
