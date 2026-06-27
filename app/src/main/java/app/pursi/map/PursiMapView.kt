@@ -73,11 +73,15 @@ import app.pursi.datasource.fi.VvSeamarkDeduplicator
 import app.pursi.water.WaterObservation
 import app.pursi.water.WaterObservationType
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.flow.sample
 import kotlinx.coroutines.withContext
 import org.maplibre.geojson.Polygon
+import kotlin.time.Duration.Companion.milliseconds
 
 private const val RADAR_OPACITY = 0.4f
 
+@OptIn(FlowPreview::class)
 @Composable
 fun PursiMapView(
     modifier: Modifier = Modifier,
@@ -115,6 +119,7 @@ fun PursiMapView(
     onCameraBearingChanged: (Float) -> Unit = {},
     followMode: FollowMode = FollowMode.CENTERED,
     orientationMode: OrientationMode = OrientationMode.NORTH_UP,
+    lastKnownBearing: Float? = null,
     lookAheadFactor: Float = 0.25f,
     lookAheadSec: Int = 5,
     showLightning: Boolean = false,
@@ -184,6 +189,7 @@ fun PursiMapView(
     val obsLocation by rememberUpdatedState(location)
     val obsBearing by rememberUpdatedState(bearingDeg)
     val obsSpeed by rememberUpdatedState(speedMps)
+    val obsLastKnownBearing by rememberUpdatedState(lastKnownBearing)
     val obsLookAheadFactor by rememberUpdatedState(lookAheadFactor)
     val currentViewportBounds by rememberUpdatedState(viewportBounds)
     val obsBoatIconSize by rememberUpdatedState(boatIconSize)
@@ -222,6 +228,11 @@ fun PursiMapView(
                 currentOnUserPan()
                 currentOnClearPoiMarker()
             }
+        }
+
+        val cameraMovingListener = MapLibreMap.OnCameraMoveListener {
+            val map = currentMap.value ?: return@OnCameraMoveListener
+            currentOnCameraBearingChanged(map.cameraPosition.bearing.toFloat())
         }
 
         val cameraIdleListener = object : MapLibreMap.OnCameraIdleListener {
@@ -412,6 +423,7 @@ fun PursiMapView(
             map.addOnMapClickListener(algaeObsClickListener)
             map.addOnMapClickListener(clickListener)
             map.addOnCameraMoveStartedListener(cameraMoveListener)
+            map.addOnCameraMoveListener(cameraMovingListener)
             map.addOnCameraIdleListener(cameraIdleListener)
             onMapReady(map)
 
@@ -434,6 +446,7 @@ fun PursiMapView(
                 osmSeamarkClickListener?.let { m.removeOnMapClickListener(it) }
                 algaeObsClickListener?.let { m.removeOnMapClickListener(it) }
                 m.removeOnCameraMoveStartedListener(cameraMoveListener)
+                m.removeOnCameraMoveListener(cameraMovingListener)
                 m.removeOnCameraIdleListener(cameraIdleListener)
             }
             currentMap.value = null
@@ -643,46 +656,62 @@ fun PursiMapView(
         map.getStyle { style -> MeasureOverlay.updatePoiMarker(style, poiMarker) }
     }
 
-    // Camera tracking: follow mode + orientation mode
-    LaunchedEffect(mapReadyToken, followMode, orientationMode) {
+    // Camera tracking (location only): animates target + zoom to follow the boat.
+    // Decoupled from the orientation effect so the two animations don't fight.
+    LaunchedEffect(mapReadyToken, followMode) {
         val map = currentMap.value as? MapLibreMap ?: return@LaunchedEffect
-        snapshotFlow { obsLocation to (obsBearing to obsSpeed) }.collect { (pos, pair) ->
-            val (bearing, speed) = pair
-            val offsetFactor = obsLookAheadFactor
-            val p = pos ?: return@collect
-            if (followMode == FollowMode.OFF) return@collect
+        snapshotFlow { obsLocation to obsSpeed }
+            .sample(250.milliseconds)
+            .collect { (pos, _) ->
+                val p = pos ?: return@collect
+                if (followMode == FollowMode.OFF) return@collect
 
-            val target = when (followMode) {
-                FollowMode.CENTERED -> {
-                    if (offsetFactor > 0f) {
-                        val boatScrn = map.projection.toScreenLocation(LatLng(p.latitude, p.longitude))
-                        val mapH = mapView.height.toFloat()
-                        if (mapH > 0f) {
-                            boatScrn.offset(0f, -(mapH * offsetFactor))
-                            val ahead = map.projection.fromScreenLocation(boatScrn)
-                            LatLng(ahead.latitude, ahead.longitude)
-                        } else p
+                val offsetFactor = obsLookAheadFactor
+                val target = if (offsetFactor > 0f) {
+                    val boatScrn = map.projection.toScreenLocation(LatLng(p.latitude, p.longitude))
+                    val mapH = mapView.height.toFloat()
+                    if (mapH > 0f) {
+                        boatScrn.offset(0f, -(mapH * offsetFactor))
+                        val ahead = map.projection.fromScreenLocation(boatScrn)
+                        LatLng(ahead.latitude, ahead.longitude)
                     } else p
+                } else p
+
+                val zoom = map.cameraPosition.zoom.coerceAtLeast(10.0)
+                map.animateCamera(
+                    CameraUpdateFactory.newLatLngZoom(target, zoom),
+                    500
+                )
+            }
+    }
+
+    // Orientation: animates only the bearing. Runs even when followMode == OFF
+    // so the user can change orientation while panned away.
+    LaunchedEffect(mapReadyToken, orientationMode) {
+        val map = currentMap.value as? MapLibreMap ?: return@LaunchedEffect
+        snapshotFlow { obsBearing to obsLastKnownBearing }
+            .sample(250.milliseconds)
+            .collect { pair ->
+                val bearing: Float? = pair.first
+                val lastKnown: Float? = pair.second
+                val current = map.cameraPosition
+                val newBearing = when (orientationMode) {
+                    OrientationMode.NORTH_UP -> 0.0
+                    OrientationMode.COURSE_UP -> {
+                        val b = bearing ?: lastKnown
+                        b?.toDouble() ?: current.bearing
+                    }
                 }
-                FollowMode.OFF -> return@collect
+                val camPos = CameraPosition.Builder()
+                    .target(current.target)
+                    .zoom(current.zoom)
+                    .bearing(newBearing)
+                    .build()
+                map.animateCamera(
+                    CameraUpdateFactory.newCameraPosition(camPos),
+                    200
+                )
             }
-
-            val cameraBearing = when (orientationMode) {
-                OrientationMode.NORTH_UP -> 0.0
-                OrientationMode.COURSE_UP -> (bearing ?: 0f).toDouble()
-            }
-
-            val zoom = map.cameraPosition.zoom.coerceAtLeast(10.0)
-            val cameraPos = CameraPosition.Builder()
-                .target(target)
-                .zoom(zoom)
-                .bearing(cameraBearing)
-                .build()
-            map.animateCamera(
-                CameraUpdateFactory.newCameraPosition(cameraPos),
-                1000
-            )
-        }
     }
 
     LaunchedEffect(mapReadyToken, routeWaypoints) {

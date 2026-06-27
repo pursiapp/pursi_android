@@ -89,6 +89,7 @@ class MapViewModel @Inject constructor(
 
     val currentLocation = locationStateHolder.currentLocation
     val isMockLocation = locationStateHolder.isMocking
+    val lastKnownBearing: StateFlow<Float?> = locationStateHolder.lastKnownBearing
 
     private val _currentRadarProvider = MutableStateFlow<app.pursi.datasource.core.RadarProvider?>(null)
     val currentRadarProvider: StateFlow<app.pursi.datasource.core.RadarProvider?> = _currentRadarProvider.asStateFlow()

@@ -39,6 +39,9 @@ class LocationStateHolder @Inject constructor() {
     private val _isMocking = MutableStateFlow(false)
     val isMocking: StateFlow<Boolean> = _isMocking.asStateFlow()
 
+    private val _lastKnownBearing = MutableStateFlow<Float?>(null)
+    val lastKnownBearing: StateFlow<Float?> = _lastKnownBearing.asStateFlow()
+
     private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
 
     fun setMockLocation(lat: Double, lon: Double) {
@@ -102,6 +105,7 @@ class LocationStateHolder @Inject constructor() {
             ).toDouble()
         }
         lastRealLocation = filtered
+        updateLastKnownBearing(filtered)
         _currentLocation.value = filtered
         startInterpolation()
     }
@@ -113,6 +117,7 @@ class LocationStateHolder @Inject constructor() {
         positionSpeedMps = 0.0
         val accepted = positionSmoother.filter(raw) ?: return
         lastRealLocation = accepted
+        updateLastKnownBearing(accepted)
         _currentLocation.value = accepted
         startInterpolation()
     }
@@ -132,6 +137,16 @@ class LocationStateHolder @Inject constructor() {
         lastRealLocation = null
         prevRealLocation = null
         interpolationBearing = 0.0
+        _lastKnownBearing.value = null
+    }
+
+    private fun updateLastKnownBearing(location: Location) {
+        val gpsBearing = if (location.hasBearing()) location.bearing else Float.NaN
+        val derivedBearing = if (interpolationBearing > 0.0) interpolationBearing.toFloat() else Float.NaN
+        val b = if (!gpsBearing.isNaN()) gpsBearing else derivedBearing
+        if (!b.isNaN()) {
+            _lastKnownBearing.value = b
+        }
     }
 
     private fun startInterpolation() {

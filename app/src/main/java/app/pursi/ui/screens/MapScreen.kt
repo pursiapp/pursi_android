@@ -91,6 +91,7 @@ fun MapScreen(
     val pressureHPa = nearestWind?.pressureHPa
 
     val activity = context as? android.app.Activity
+    val lastKnownBearing by mapViewModel.lastKnownBearing.collectAsStateWithLifecycle()
     var currentZoom by remember { mutableStateOf(initialCamZoom) }
     DisposableEffect(keepScreenOn) {
         if (keepScreenOn) {
@@ -344,6 +345,7 @@ fun MapScreen(
             onCameraBearingChanged = { mapBearing = it },
             followMode = uiState.followMode,
             orientationMode = uiState.orientationMode,
+            lastKnownBearing = lastKnownBearing,
             lookAheadFactor = lookAheadFactor,
             lookAheadSec = uiState.lookAheadSec,
             showLightning = uiState.showLightning,
