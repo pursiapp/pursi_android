@@ -24,4 +24,8 @@ class RainViewerRadarProvider @Inject constructor(
     }
 
     override val maxHistoryMinutes = 120
+
+    override fun refreshCache() {
+        timestampSource.clearCache()
+    }
 }

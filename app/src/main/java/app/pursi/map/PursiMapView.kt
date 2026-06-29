@@ -784,7 +784,7 @@ fun PursiMapView(
 
         map.getStyle { style ->
             if (token != radarEffectToken) return@getStyle
-            RadarOverlay.update(style, provider, result.url, obsRadarOpacity)
+            RadarOverlay.update(style, provider, result.url, obsRadarOpacity, isHistory = radarTimeOffset > 0)
         }
     }
 

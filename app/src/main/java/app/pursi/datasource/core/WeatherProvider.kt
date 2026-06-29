@@ -32,6 +32,20 @@ interface WeatherProvider {
         latitude: Double, longitude: Double
     ): List<WaveStation>
 
+    /**
+     * Returns the hourly forecast for the given point.
+     *
+     * Contract on returned [ForecastPoint]s:
+     *  - `timestamp` MUST be the validity time (epoch seconds, UTC). Consumers
+     *    (wind meter, forecast tab) use this to select "now" — provider must
+     *    populate it from the source's own time field, not from device clock.
+     *  - `referenceTime` SHOULD be the model-run/issuance time (epoch seconds).
+     *    May default to 0 if the source does not expose it.
+     *
+     * Implementations throw [WeatherProviderException] on fetch/parse failure
+     * (so [CompositeWeatherProvider] can fall back to the next provider) and
+     * return an empty list only when there is genuinely no data.
+     */
     suspend fun getForecast(
         latitude: Double, longitude: Double
     ): List<ForecastPoint>

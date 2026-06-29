@@ -6,6 +6,8 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import app.pursi.datasource.core.SourceResolver
 import app.pursi.datasource.core.WeatherProvider
 import app.pursi.location.LocationStateHolder
+import app.pursi.map.NetworkMonitor
+import app.pursi.datasource.core.RadarProvider
 import app.pursi.location.SpeedCalculator
 import app.pursi.weather.WaterLevelStation
 import javax.inject.Inject
@@ -17,13 +19,17 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import app.pursi.datasource.core.CompositeWeatherProvider
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
@@ -45,7 +51,8 @@ import kotlinx.serialization.json.Json
 class WeatherRepository @Inject constructor(
     @ApplicationContext private val context: Context,
     private val sourceResolver: SourceResolver,
-    private val locationStateHolder: LocationStateHolder
+    private val locationStateHolder: LocationStateHolder,
+    private val networkMonitor: NetworkMonitor
 ) {
 
     companion object {
@@ -56,6 +63,10 @@ class WeatherRepository @Inject constructor(
         private const val KEY_CORE_TIME = "core_fetch_time"
         private const val KEY_FORECAST_TIME = "forecast_fetch_time"
         private const val KEY_LIGHTNING_TIME = "lightning_fetch_time"
+        private const val KEY_FORECAST_CACHE = "cached_forecast"
+        private const val KEY_STATIONS_CACHE = "cached_stations"
+        private const val KEY_WAVES_CACHE = "cached_waves"
+        private const val KEY_WATER_CACHE = "cached_water"
         private const val CORE_REFRESH_MS = 600_000L // 10 min
         private const val FORECAST_REFRESH_MS = 3_600_000L // 60 min
         private const val LIGHTNING_SLOW_MS = 600_000L // 10 min
@@ -96,6 +107,10 @@ class WeatherRepository @Inject constructor(
     private val _isRefreshing = MutableStateFlow(false)
     val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
 
+    // Atomic refresh guard (S4) — a force refresh can wait for a running core
+    // refresh, instead of being silently dropped by the check-then-set race.
+    private val refreshMutex = Mutex()
+
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error.asStateFlow()
 
@@ -106,11 +121,23 @@ class WeatherRepository @Inject constructor(
     val activeProvider: StateFlow<WeatherProvider?> = _activeProvider.asStateFlow()
 
     // Cache coordinates
-    private var lastFetchLat = Double.NaN
-    private var lastFetchLon = Double.NaN
+    @Volatile private var lastFetchLat = Double.NaN
+    @Volatile private var lastFetchLon = Double.NaN
+
+    // Suspend-on-background gate (S3.1). When `paused`, loops idle at 1s cadence
+    // instead of running while the app is backgrounded — a brief background doesn't
+    // cancel/restart them.
+    @Volatile private var paused: Boolean = false
+
+    // Network-restore collector (S3.2) — refreshed only on state changes.
+    private var networkRestoreJob: Job? = null
 
     init {
         loadCachedWarnings()
+        loadCachedForecast()
+        loadCachedStations()
+        loadCachedWaves()
+        loadCachedWaterLevel()
     }
 
     // ── Auto Refresh (three separate loops) ──────────────────────────────
@@ -121,17 +148,28 @@ class WeatherRepository @Inject constructor(
         coreRefreshJob = scope.launch {
             refresh()
             while (isActive) {
+                pauseGate()
                 delay(CORE_REFRESH_MS)
                 refresh()
             }
         }
 
         forecastRefreshJob = scope.launch {
-            val loc = withTimeoutOrNull(10_000L) {
-                locationStateHolder.currentLocation.filterNotNull().firstOrNull()
-            }
-            if (loc != null) refreshForecastOnly(loc.latitude, loc.longitude)
+            // Initial fetch — wait briefly for location, then retry on 30s cadence if absent
+            // (S3.3: don't blind-spot for 60 min on a slow GPS lock)
             while (isActive) {
+                val loc = withTimeoutOrNull(10_000L) {
+                    locationStateHolder.currentLocation.filterNotNull().firstOrNull()
+                }
+                if (loc != null) {
+                    refreshForecastOnly(loc.latitude, loc.longitude)
+                    break
+                }
+                pauseGate()
+                delay(30_000L)
+            }
+            while (isActive) {
+                pauseGate()
                 delay(FORECAST_REFRESH_MS)
                 val fLoc = withTimeoutOrNull(10_000L) {
                     locationStateHolder.currentLocation.filterNotNull().firstOrNull()
@@ -141,12 +179,45 @@ class WeatherRepository @Inject constructor(
         }
 
         startLightningSlowLoop()
+
+        // Network-restore hook: when connectivity returns, refresh weather and clear
+        // any cached radar state for the current region (S3.2).
+        networkRestoreJob?.cancel()
+        networkRestoreJob = scope.launch {
+            networkMonitor.isOnline
+                .filter { it }
+                .collect {
+                    refresh(force = true)
+                    refreshRegionalRadarCaches()
+                }
+        }
     }
 
     fun stopAutoRefresh() {
         coreRefreshJob?.cancel(); coreRefreshJob = null
         forecastRefreshJob?.cancel(); forecastRefreshJob = null
         lightningRefreshJob?.cancel(); lightningRefreshJob = null
+        networkRestoreJob?.cancel(); networkRestoreJob = null
+    }
+
+    /** Suspend-on-background gate; called from loops to idle while paused. */
+    private suspend fun pauseGate() {
+        while (paused && currentCoroutineContext()[Job]?.isActive != false) {
+            delay(1_000L)
+        }
+    }
+
+    /** Called by MainActivity.onStop — loops idle but stay running. */
+    fun pause() { paused = true }
+
+    /** Called by MainActivity.onStart — loops resume. */
+    fun resume() { paused = false }
+
+    private fun refreshRegionalRadarCaches() {
+        if (lastFetchLat.isNaN() || lastFetchLon.isNaN()) return
+        sourceResolver.radarProviders
+            .filter { it.coverage.contains(lastFetchLat, lastFetchLon) }
+            .forEach { (it as RadarProvider).refreshCache() }
     }
 
     fun destroy() {
@@ -161,6 +232,7 @@ class WeatherRepository @Inject constructor(
         _lightningMode.value = LightningMode.SLOW
         lightningRefreshJob = scope.launch {
             while (isActive) {
+                pauseGate()
                 val loc = withTimeoutOrNull(10_000L) {
                     locationStateHolder.currentLocation.filterNotNull().firstOrNull()
                 }
@@ -182,6 +254,7 @@ class WeatherRepository @Inject constructor(
         lightningRefreshJob = scope.launch {
             var emptyCount = 0
             while (isActive) {
+                pauseGate()
                 delay(LIGHTNING_FAST_MS)
                 val loc = withTimeoutOrNull(10_000L) {
                     locationStateHolder.currentLocation.filterNotNull().firstOrNull()
@@ -205,13 +278,24 @@ class WeatherRepository @Inject constructor(
     private suspend fun fetchLightning(lat: Double, lon: Double): List<LightningStrike> {
         val allProviders = sourceResolver.allWeatherProvidersFor(lat, lon)
         val primary = allProviders.firstOrNull() ?: return emptyList()
+        // Use composite so a failing primary (e.g. FMI down) falls back to any
+        // secondary that supports lightning (S4). Composite falls back on
+        // WeatherProviderException (R2) AND on empty.
+        val provider: WeatherProvider = if (allProviders.size > 1) {
+            CompositeWeatherProvider(primary, allProviders.drop(1))
+        } else {
+            primary
+        }
         return try {
-            val strikes = primary.getLightningData(
+            val strikes = provider.getLightningData(
                 lat - 1.0, lon - 1.0, lat + 1.0, lon + 1.0
             )
             prefs.edit().putLong(KEY_LIGHTNING_TIME, System.currentTimeMillis()).apply()
             strikes
-        } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (_: Exception) {
+        } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+        catch (e: app.pursi.datasource.core.WeatherProviderException) {
+            emptyList()
+        } catch (_: Exception) {
             emptyList()
         }
     }
@@ -219,8 +303,17 @@ class WeatherRepository @Inject constructor(
     // ── Manual Refresh (core data only) ──────────────────────────────────
 
     suspend fun refresh(force: Boolean = false) {
-        if (_isRefreshing.value) return
+        if (force) {
+            // Force refresh blocks until it can run.
+            refreshMutex.withLock { doRefresh(force = true) }
+        } else {
+            // Non-force returns immediately if another refresh is in progress.
+            if (!refreshMutex.tryLock()) return
+            try { doRefresh(force = false) } finally { refreshMutex.unlock() }
+        }
+    }
 
+    private suspend fun doRefresh(force: Boolean) {
         val location = withTimeoutOrNull(20_000L) {
             locationStateHolder.currentLocation.filterNotNull().firstOrNull()
         }
@@ -267,13 +360,16 @@ class WeatherRepository @Inject constructor(
                 val wavesDeferred = async { 
                     withTimeoutOrNull(15_000L) { weatherProvider.getWaveObservations(lat, lon) }
                 }
-                val waterDeferred = async { 
+                val waterDeferred = async {
                     withTimeoutOrNull(15_000L) { weatherProvider.getWaterLevelData(lat, lon) }
                 }
                 _stations.value = stationsDeferred.await()?.filter { it.station.hasAnyData } ?: emptyList()
                 _waveStations.value = wavesDeferred.await() ?: emptyList()
                 _waterLevel.value = waterDeferred.await() ?: emptyList()
             }
+            persistList(KEY_STATIONS_CACHE, _stations.value)
+            persistList(KEY_WAVES_CACHE, _waveStations.value)
+            persistList(KEY_WATER_CACHE, _waterLevel.value)
             prefs.edit().putLong(KEY_CORE_TIME, now).apply()
         }
 
@@ -282,9 +378,9 @@ class WeatherRepository @Inject constructor(
                 warningProvider.getMarineWarnings(lang, lat, lon)
             } ?: emptyList()
             _warnings.value = fetchedWarnings
-            if (fetchedWarnings.isNotEmpty()) {
-                persistWarnings(fetchedWarnings)
-            }
+            // Always persist (including []) so loadCachedWarnings() on cold start
+            // can't restore expired warnings when FMI has cleared them.
+            persistWarnings(fetchedWarnings)
             prefs.edit().putLong(KEY_WARNING_TIME, now).apply()
         }
 
@@ -294,12 +390,24 @@ class WeatherRepository @Inject constructor(
 
     private suspend fun refreshForecastOnly(lat: Double, lon: Double) {
         val allProviders = sourceResolver.allWeatherProvidersFor(lat, lon)
-        val primary = allProviders.firstOrNull()
-        if (primary == null) return
+        val primary = allProviders.firstOrNull() ?: return
+        // Use composite so a failing primary falls back to a working secondary
+        // (e.g. FMI down → MET Norway). Single-provider case is a no-op composite.
+        val provider: WeatherProvider = if (allProviders.size > 1) {
+            CompositeWeatherProvider(primary, allProviders.drop(1))
+        } else {
+            primary
+        }
         try {
-            _forecast.value = primary.getForecast(lat, lon)
+            _forecast.value = provider.getForecast(lat, lon)
+            persistList(KEY_FORECAST_CACHE, _forecast.value)
             prefs.edit().putLong(KEY_FORECAST_TIME, System.currentTimeMillis()).apply()
-        } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (_: Exception) { }
+        } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+        catch (e: app.pursi.datasource.core.WeatherProviderException) {
+            // Surface to UI; do NOT clear _forecast — keep last good list (S2 persistence
+            // will repopulate it on cold start).
+            _error.value = e.message ?: "Sääennuste ei juuri nyt saatavilla"
+        } catch (_: Exception) { }
     }
 
     // ── Cache Logic ──────────────────────────────────────────────────────
@@ -334,6 +442,35 @@ class WeatherRepository @Inject constructor(
             _warnings.value = cached
         } catch (_: Exception) { }
     }
+
+    private inline fun <reified T> loadCachedList(key: String, assign: (List<T>) -> Unit) {
+        try {
+            val serialized = prefs.getString(key, null) ?: return
+            val cached: List<T> = json.decodeFromString(serialized)
+            assign(cached)
+        } catch (_: Exception) { }
+    }
+
+    private inline fun <reified T> persistList(key: String, value: List<T>) {
+        try {
+            val serialized = json.encodeToString(value)
+            prefs.edit().putString(key, serialized).apply()
+        } catch (e: Exception) {
+            Log.w(TAG, "Cache write failed for $key", e)
+        }
+    }
+
+    private fun loadCachedForecast() =
+        loadCachedList<ForecastPoint>(KEY_FORECAST_CACHE) { _forecast.value = it }
+
+    private fun loadCachedStations() =
+        loadCachedList<StationWeatherData>(KEY_STATIONS_CACHE) { _stations.value = it }
+
+    private fun loadCachedWaves() =
+        loadCachedList<WaveStation>(KEY_WAVES_CACHE) { _waveStations.value = it }
+
+    private fun loadCachedWaterLevel() =
+        loadCachedList<WaterLevelStation>(KEY_WATER_CACHE) { _waterLevel.value = it }
 
     // ── Warning Helpers for Map & Safety ─────────────────────────────────
 

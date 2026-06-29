@@ -26,6 +26,7 @@ import app.pursi.datasource.fi.FinnishChartProvider
 import app.pursi.datasource.fi.FinnishMarineFeatureProvider
 import app.pursi.datasource.fi.FinnishPropertyMapper
 import app.pursi.datasource.fi.FinnishWarningProvider
+import app.pursi.datasource.fi.FmiRadarCapabilities
 import app.pursi.datasource.fi.FmiRadarProvider
 import app.pursi.datasource.fi.FmiWeatherProvider
 //import app.pursi.datasource.global.EmodnetChartProvider
@@ -101,8 +102,8 @@ object DataSourceModule {
 
     @Provides
     @IntoSet
-    fun provideFmiRadarProvider(): RadarProvider =
-        FmiRadarProvider()
+    fun provideFmiRadarProvider(caps: FmiRadarCapabilities): RadarProvider =
+        FmiRadarProvider(caps)
 
     @Provides
     @Singleton

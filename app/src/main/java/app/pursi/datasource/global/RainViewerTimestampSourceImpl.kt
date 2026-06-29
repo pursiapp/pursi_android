@@ -1,5 +1,7 @@
 package app.pursi.datasource.global
 
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.withTimeoutOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONObject
@@ -16,17 +18,32 @@ class RainViewerTimestampSourceImpl @Inject constructor(
     @Volatile
     private var lastFetchTime: Long = 0
 
+    private var firstFetch = CompletableDeferred<Unit>()
+
     init {
         refreshAsync()
     }
 
     override fun getNearestFrame(targetUnixTime: Long): Pair<Long, String>? {
-        if (cachedFrames.isNotEmpty() &&
-            System.currentTimeMillis() - lastFetchTime > REFRESH_INTERVAL_MS
-        ) {
+        // Trigger refresh on stale-non-empty OR on permanently-empty (recovery).
+        val nowMs = System.currentTimeMillis()
+        if (cachedFrames.isEmpty() || nowMs - lastFetchTime > REFRESH_INTERVAL_MS) {
             refreshAsync()
         }
         return cachedFrames.minByOrNull { kotlin.math.abs(it.first - targetUnixTime) }
+    }
+
+    /**
+     * Awaits the first successful fetch with a short timeout. Lets callers (e.g.
+     * PursiMapView's 1s retry loop) make progress after a failed init instead
+     * of spinning on null forever.
+     */
+    suspend fun awaitFirstFrames(timeoutMs: Long = 3000L) {
+        if (cachedFrames.isNotEmpty()) return
+        withTimeoutOrNull(timeoutMs) {
+            firstFetch.await()
+            Unit
+        }
     }
 
     fun refreshAsync() {
@@ -36,9 +53,12 @@ class RainViewerTimestampSourceImpl @Inject constructor(
                 if (frames.isNotEmpty()) {
                     cachedFrames = frames
                     lastFetchTime = System.currentTimeMillis()
+                    firstFetch.complete(Unit)
+                } else {
+                    firstFetch.complete(Unit)
                 }
             } catch (_: Exception) {
-                // keep old cache on failure
+                firstFetch.complete(Unit)
             }
         }.apply { isDaemon = true }.start()
     }
@@ -68,13 +88,35 @@ class RainViewerTimestampSourceImpl @Inject constructor(
         }
 
         val sorted = frames.sortedBy { it.first }.distinctBy { it.first }
-        android.util.Log.d("RainViewer", "Fetched ${sorted.size} frames (past=${past.length()}, now=${if (radar.has("now")) radar.getJSONArray("now").length() else 0})")
         return sorted
     }
 
-    fun clearCache() {
+    /**
+     * Synchronous variant of [refreshAsync] for tests and callers that want a
+     * deterministic fetch. Returns true on success, false on failure.
+     */
+    fun refreshNow(): Boolean {
+        return try {
+            val frames = fetchFrames()
+            if (frames.isNotEmpty()) {
+                cachedFrames = frames
+                lastFetchTime = System.currentTimeMillis()
+            }
+            firstFetch.complete(Unit)
+            true
+        } catch (e: Exception) {
+            firstFetch.complete(Unit)
+            false
+        }
+    }
+
+    override fun clearCache() {
         cachedFrames = emptyList()
         lastFetchTime = 0
+        // Reset the firstFetch so awaitFirstFrames can wait for the new fetch
+        synchronized(this) {
+            firstFetch = CompletableDeferred()
+        }
         refreshAsync()
     }
 

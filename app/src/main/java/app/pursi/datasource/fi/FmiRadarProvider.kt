@@ -3,13 +3,17 @@ package app.pursi.datasource.fi
 import app.pursi.datasource.core.BoundingBox
 import app.pursi.datasource.core.RadarProvider
 import app.pursi.datasource.core.RadarTileUrl
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
 import java.util.TimeZone
 import javax.inject.Inject
 
-class FmiRadarProvider @Inject constructor() : RadarProvider {
+class FmiRadarProvider @Inject constructor(
+    private val capabilities: FmiRadarCapabilities
+) : RadarProvider {
     override val providerId = "fi-fmi-radar"
     override val displayName = "Ilmatieteen laitos"
     override val attribution = "© Ilmatieteen laitos"
@@ -18,26 +22,54 @@ class FmiRadarProvider @Inject constructor() : RadarProvider {
     override val minZoom = 1.0f
     override val maxZoom = 14.0f
 
-    override suspend fun getRadarTileUrl(timeOffsetMinutes: Int): RadarTileUrl? {
-        val cal = Calendar.getInstance(TimeZone.getTimeZone("UTC"))
-        cal.add(Calendar.MINUTE, -timeOffsetMinutes)
-        cal.add(Calendar.MINUTE, -(cal.get(Calendar.MINUTE) % 5))
-        cal.add(Calendar.MINUTE, -5)
-        cal.set(Calendar.SECOND, 0)
-        cal.set(Calendar.MILLISECOND, 0)
-        return RadarTileUrl(buildWmsUrl(cal), effectiveDelayMinutes = timeOffsetMinutes + 5)
-    }
-
     override val maxHistoryMinutes = 60
 
-    private fun buildWmsUrl(cal: Calendar): String {
+    override suspend fun getRadarTileUrl(timeOffsetMinutes: Int): RadarTileUrl? = withContext(Dispatchers.IO) {
+        val nowSec = System.currentTimeMillis() / 1000
+        if (timeOffsetMinutes == 0) {
+            // Live: FMI's `current` resolves to the actual latest-published frame.
+            // No device-clock arithmetic → no "old rain" or "empty future" frames.
+            // Report a small but honest delay so the HUD reflects FMI's ~5-min publication lag.
+            val latest = capabilities.latestAvailableEpochSec()
+            val delay = if (latest != null) {
+                ((nowSec - latest).coerceAtLeast(0L) / 60L).toInt().coerceAtLeast(0)
+            } else {
+                5
+            }
+            return@withContext RadarTileUrl(buildWmsUrl("current"), effectiveDelayMinutes = delay)
+        }
+
+        // History: request a frame at (latestAvailable - offset), floored to 5 min.
+        // History frames are immutable once published → safe; never requests the future.
+        val latest = capabilities.latestAvailableEpochSec() ?: return@withContext null
+        val targetSec = floorTo5Min(latest - (timeOffsetMinutes.toLong() * 60L))
+        val delayMinutes = ((nowSec - targetSec) / 60L).toInt().coerceAtLeast(0)
+        val iso = formatIso(targetSec * 1000L)
+        RadarTileUrl(buildWmsUrl(iso), effectiveDelayMinutes = delayMinutes)
+    }
+
+    override fun refreshCache() {
+        capabilities.clearCache()
+    }
+
+    private fun floorTo5Min(epochSec: Long): Long {
+        val cal = Calendar.getInstance(TimeZone.getTimeZone("UTC"))
+        cal.timeInMillis = epochSec * 1000L
+        cal.set(Calendar.MINUTE, (cal.get(Calendar.MINUTE) / 5) * 5)
+        cal.set(Calendar.SECOND, 0)
+        cal.set(Calendar.MILLISECOND, 0)
+        return cal.timeInMillis / 1000L
+    }
+
+    private fun formatIso(epochMs: Long): String {
         val sdf = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US)
         sdf.timeZone = TimeZone.getTimeZone("UTC")
-        val timeParam = "&TIME=${sdf.format(cal.time)}"
+        return sdf.format(epochMs)
+    }
 
-        return "https://openwms.fmi.fi/geoserver/ows?SERVICE=WMS&VERSION=1.3.0" +
+    private fun buildWmsUrl(timeParam: String): String =
+        "https://openwms.fmi.fi/geoserver/ows?SERVICE=WMS&VERSION=1.3.0" +
             "&REQUEST=GetMap&LAYERS=Radar:suomi_rr_eureffin&STYLES=" +
             "&CRS=EPSG:3857&BBOX={bbox-epsg-3857}&WIDTH=256&HEIGHT=256" +
-            "&FORMAT=image/png&TRANSPARENT=true$timeParam"
-    }
+            "&FORMAT=image/png&TRANSPARENT=true&TIME=$timeParam"
 }

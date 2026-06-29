@@ -45,11 +45,25 @@ data class MarineWarning(
     val polygonCoords: String = ""
 )
 
-data class StationWeatherData(val station: WeatherObservation, val history: List<WeatherObservation> = emptyList())
+@Serializable
+data class StationWeatherData(
+    val station: WeatherObservation,
+    val history: List<WeatherObservation> = emptyList()
+)
 
-data class WaveStation(val stationName: String, val latitude: Double, val longitude: Double, val timestamp: String,
-    val waveHeightM: Float? = null, val waveDirectionDeg: Float? = null, val waterTemperatureC: Float? = null, val wavePeriodS: Float? = null)
+@Serializable
+data class WaveStation(
+    val stationName: String,
+    val latitude: Double,
+    val longitude: Double,
+    val timestamp: String,
+    val waveHeightM: Float? = null,
+    val waveDirectionDeg: Float? = null,
+    val waterTemperatureC: Float? = null,
+    val wavePeriodS: Float? = null
+)
 
+@Serializable
 data class WaterLevelStation(
     val stationName: String,
     val latitude: Double,
@@ -59,11 +73,18 @@ data class WaterLevelStation(
     val distanceKm: Float? = null
 )
 
-data class ForecastPoint(val timestamp: Long, val temperatureC: Float? = null, val windSpeedMs: Float? = null,
+@Serializable
+data class ForecastPoint(
+    val timestamp: Long,
+    val referenceTime: Long = 0L,
+    val temperatureC: Float? = null,
+    val windSpeedMs: Float? = null,
     val windDirectionDeg: Float? = null,
     val pressureHPa: Float? = null,
     val weatherSymbol: Float? = null,
-    val cloudiness: Float? = null, val precipitationMm: Float? = null)
+    val cloudiness: Float? = null,
+    val precipitationMm: Float? = null
+)
 
 @Serializable data class WeatherWarning(val id: String, val severity: WarningSeverity, val warningType: String, val area: String, val description: String, val startTime: String, val endTime: String, val issuedTime: String)
 @Serializable enum class WarningSeverity { MINOR, MODERATE, SEVERE, VERY_SEVERE }

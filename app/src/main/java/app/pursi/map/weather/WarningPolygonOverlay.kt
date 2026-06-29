@@ -2,6 +2,7 @@ package app.pursi.map.weather
 
 import app.pursi.weather.MarineWarning
 import org.maplibre.android.maps.Style
+import org.maplibre.android.style.expressions.Expression
 import org.maplibre.android.style.layers.FillLayer
 import org.maplibre.android.style.layers.LineLayer
 import org.maplibre.android.style.layers.PropertyFactory
@@ -66,8 +67,8 @@ object WarningPolygonOverlay {
 
         val fillLayer = FillLayer(FILL_LAYER_ID, SOURCE_ID).apply {
             setProperties(
-                PropertyFactory.fillColor("#FFB300"),
-                PropertyFactory.fillOpacity(0.25f)
+                PropertyFactory.fillColor(Expression.get("fillColor")),
+                PropertyFactory.fillOpacity(Expression.get("fillOpacity"))
             )
         }
         style.addLayerBelow(fillLayer, "layer-openseamap")
@@ -75,7 +76,7 @@ object WarningPolygonOverlay {
         val outlineLayer = LineLayer(OUTLINE_LAYER_ID, SOURCE_ID).apply {
             setProperties(
                 PropertyFactory.lineWidth(2f),
-                PropertyFactory.lineColor("#FF6F00"),
+                PropertyFactory.lineColor(Expression.get("outlineColor")),
                 PropertyFactory.lineOpacity(0.8f)
             )
         }

@@ -4,12 +4,15 @@ import android.content.Context
 import android.content.SharedPreferences
 import app.pursi.datasource.core.SourceResolver
 import app.pursi.location.LocationStateHolder
+import app.pursi.map.NetworkMonitor
 import app.pursi.testutils.MainDispatcherRule
 import android.content.res.Configuration
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
@@ -25,6 +28,7 @@ class WeatherRepositoryTest {
     private val locationStateHolder = LocationStateHolder()
     private val prefs = mockk<SharedPreferences>(relaxed = true)
     private val editor = mockk<SharedPreferences.Editor>(relaxed = true)
+    private val networkMonitor = mockk<NetworkMonitor>(relaxed = true)
 
     private lateinit var repository: WeatherRepository
 
@@ -42,7 +46,7 @@ class WeatherRepositoryTest {
         every { prefs.getString(any(), any()) } returns null
         every { prefs.getLong(any(), any()) } returns 0L
 
-        repository = WeatherRepository(context, sourceResolver, locationStateHolder)
+        repository = WeatherRepository(context, sourceResolver, locationStateHolder, networkMonitor)
     }
 
     @Test
@@ -68,5 +72,26 @@ class WeatherRepositoryTest {
     @Test
     fun `activeWarningSummary returns empty string when no warnings`() {
         assertTrue(repository.activeWarningSummary().isEmpty())
+    }
+
+    /**
+     * S2: Cold start should populate StateFlows from cache so the user sees
+     * last-known data while the first refresh runs (no blank-then-pop).
+     */
+    @Test
+    fun `loads cached forecast on init`() = runTest {
+        val cached = listOf(
+            ForecastPoint(timestamp = 1_700_000_000L, referenceTime = 1_700_000_000L, temperatureC = 18f, windSpeedMs = 5f)
+        )
+        val cachedJson = kotlinx.serialization.json.Json.encodeToString(
+            kotlinx.serialization.builtins.ListSerializer(ForecastPoint.serializer()), cached
+        )
+        // Reset and re-setup so the loadCachedForecast() init block sees the cached value
+        every { prefs.getString("cached_forecast", null) } returns cachedJson
+        val freshRepo = WeatherRepository(context, sourceResolver, locationStateHolder, networkMonitor)
+        val loaded = freshRepo.forecast.value
+        assertNotNull(loaded)
+        assertEquals(1, loaded.size)
+        assertEquals(18f, loaded[0].temperatureC)
     }
 }

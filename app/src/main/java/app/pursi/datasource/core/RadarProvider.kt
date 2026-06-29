@@ -23,4 +23,11 @@ interface RadarProvider {
 
     val maxHistoryMinutes: Int
         get() = 60
+
+    /**
+     * Invalidate any provider-internal cache (timestamp lists, capabilities, etc.).
+     * Called by [WeatherRepository] on network-restore. Default no-op so providers
+     * without cache don't need to override.
+     */
+    fun refreshCache() {}
 }

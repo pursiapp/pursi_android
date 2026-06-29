@@ -22,6 +22,7 @@ import app.pursi.data.model.RouteWaypoint
 import app.pursi.data.model.SavedRoute
 import app.pursi.ui.components.*
 import app.pursi.weather.WeatherUnitPrefs
+import app.pursi.weather.currentForecastPoint
 import app.pursi.data.model.TrackSummary
 import app.pursi.location.BearingSmoother
 import app.pursi.location.SpeedSmoother
@@ -84,7 +85,7 @@ fun MapScreen(
     val uiState by mapViewModel.uiState.collectAsStateWithLifecycle()
     val forecast by mapViewModel.forecast.collectAsStateWithLifecycle()
     val radarProvider by mapViewModel.currentRadarProvider.collectAsStateWithLifecycle()
-    val nearestWind = forecast.firstOrNull()
+    val nearestWind = currentForecastPoint(forecast)
     val windSpeedMs = nearestWind?.windSpeedMs
     val windDirectionDeg = nearestWind?.windDirectionDeg
     val temperatureC = nearestWind?.temperatureC
@@ -729,6 +730,7 @@ fun MapScreen(
             effectiveDelay = uiState.radarEffectiveDelay,
             onRadarTimeOffsetChange = { mapViewModel.setRadarTimeOffset(it) },
             bottomInsetPx = bottomInsetPx,
+            maxHistoryMinutes = radarProvider?.maxHistoryMinutes ?: 60,
             modifier = Modifier.align(Alignment.BottomCenter)
         )
 

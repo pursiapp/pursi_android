@@ -38,6 +38,15 @@ class MainActivity : ComponentActivity() {
         installSplashScreen()
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+        // Start weather/ais refresh loops at process lifetime (not Activity onStart)
+        // so a brief background doesn't restart them from scratch. Loops are
+        // suspended (not cancelled) on onStop via pause(); resumed on onStart.
+        if (::weatherRepository.isInitialized) {
+            weatherRepository.startAutoRefresh()
+        }
+        if (::aisRepository.isInitialized) {
+            aisRepository.startAutoRefresh()
+        }
         setContent {
             AppNavigation(
                 tileStorage = tileStorage,
@@ -52,19 +61,13 @@ class MainActivity : ComponentActivity() {
         super.onStart()
         ensureLocationServiceRunning()
         if (::weatherRepository.isInitialized) {
-            weatherRepository.startAutoRefresh()
-        }
-        if (::aisRepository.isInitialized) {
-            aisRepository.startAutoRefresh()
+            weatherRepository.resume()
         }
     }
 
     override fun onStop() {
         if (::weatherRepository.isInitialized) {
-            weatherRepository.stopAutoRefresh()
-        }
-        if (::aisRepository.isInitialized) {
-            aisRepository.stopAutoRefresh()
+            weatherRepository.pause()
         }
         super.onStop()
     }

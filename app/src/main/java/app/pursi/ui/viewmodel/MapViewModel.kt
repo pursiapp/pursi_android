@@ -616,7 +616,8 @@ class MapViewModel @Inject constructor(
     }
 
     fun setRadarTimeOffset(minutesAgo: Int) {
-        _uiState.update { it.copy(radarTimeOffset = minutesAgo.coerceIn(0, 60)) }
+        val maxHistory = _currentRadarProvider.value?.maxHistoryMinutes ?: 60
+        _uiState.update { it.copy(radarTimeOffset = minutesAgo.coerceIn(0, maxHistory)) }
     }
 
     fun setRadarEffectiveDelay(delayMinutes: Int) {

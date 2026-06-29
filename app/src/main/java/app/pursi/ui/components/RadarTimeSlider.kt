@@ -34,9 +34,11 @@ fun RadarTimeSlider(
     effectiveDelay: Int = 0,
     onRadarTimeOffsetChange: (Int) -> Unit,
     bottomInsetPx: Dp = 0.dp,
+    maxHistoryMinutes: Int = 60,
     modifier: Modifier = Modifier
 ) {
     if (showRadar && showSlider) {
+        val maxHistory = maxHistoryMinutes.coerceAtLeast(5)
         Card(
             modifier = modifier
                 .padding(bottom = bottomInsetPx + 8.dp)
@@ -46,7 +48,7 @@ fun RadarTimeSlider(
         ) {
             Column(Modifier.padding(horizontal = 12.dp, vertical = 4.dp)) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text("-60 min", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f))
+                    Text("-$maxHistory min", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f))
                     Text(
                         if (radarTimeOffset == 0) stringResource(R.string.radar_live)
                         else "$radarTimeOffset min ago",
@@ -56,10 +58,10 @@ fun RadarTimeSlider(
                     )
                 }
                 Slider(
-                    value = (60 - radarTimeOffset).toFloat(),
-                    onValueChange = { onRadarTimeOffsetChange(60 - it.roundToInt()) },
-                    valueRange = 0f..60f,
-                    steps = 11,
+                    value = (maxHistory - radarTimeOffset).toFloat(),
+                    onValueChange = { onRadarTimeOffsetChange(maxHistory - it.roundToInt()) },
+                    valueRange = 0f..maxHistory.toFloat(),
+                    steps = (maxHistory / 5) - 1,
                     modifier = Modifier.fillMaxWidth()
                 )
                 val cal = Calendar.getInstance()

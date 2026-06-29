@@ -8,7 +8,13 @@ import org.maplibre.android.style.sources.RasterSource
 import org.maplibre.android.style.sources.TileSet
 
 object RadarOverlay {
-    fun update(style: Style, provider: RadarProvider, url: String, opacity: Float = 0.7f) {
+    fun update(
+        style: Style,
+        provider: RadarProvider,
+        url: String,
+        opacity: Float = 0.7f,
+        isHistory: Boolean = false
+    ) {
         val srcId = "radar-${provider.providerId}"
         val layerId = "radar-${provider.providerId}"
 
@@ -18,6 +24,9 @@ object RadarOverlay {
         val tileSet = TileSet("xyz", url)
         tileSet.attribution = provider.attribution
         tileSet.maxZoom = provider.maxZoom
+        // Note: MapLibre 13.2.0 TileSet does not expose minimumTileUpdateInterval.
+        // Cache control is implicit via URL (new TIME = new cache key) and the
+        // source rebuild on every refresh tick clears any previous cache.
         style.addSource(RasterSource(srcId, tileSet, 256))
         val rasterLayer = RasterLayer(layerId, srcId)
         rasterLayer.setMinZoom(provider.minZoom)

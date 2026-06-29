@@ -61,12 +61,23 @@ class RainViewerTimestampSourceImplTest {
         }
     }
 
+    /**
+     * Deterministic helper: runs the fetch synchronously and waits for it to
+     * complete. The original async init { refreshAsync() } is racy in unit
+     * tests (Thread + daemon + system-err capture), so we drive a synchronous
+     * fetch directly via refreshNow().
+     */
+    private fun await(source: RainViewerTimestampSourceImpl) {
+        source.refreshNow()
+    }
+
     @Test
     fun `returns nearest frame from API response`() {
         val client = mockOkHttp(
             """{"radar":{"past":[{"time":1000000,"path":"/v2/radar/1000000"},{"time":1000600,"path":"/v2/radar/1000600"}]}}"""
         )
         val source = RainViewerTimestampSourceImpl(client)
+        await(source)
         val frame = source.getNearestFrame(1000010L)
         assertEquals(1000000L, frame?.first)
         assertEquals("/v2/radar/1000000", frame?.second)
@@ -76,6 +87,7 @@ class RainViewerTimestampSourceImplTest {
     fun `returns null when API fails and cache empty`() {
         val client = mockFailingClient()
         val source = RainViewerTimestampSourceImpl(client)
+        await(source)
         val frame = source.getNearestFrame(1000000L)
         assertNull(frame)
     }
@@ -86,6 +98,7 @@ class RainViewerTimestampSourceImplTest {
             """{"radar":{"past":[{"time":1000000,"path":"/v2/radar/1000000"}]}}"""
         )
         val source = RainViewerTimestampSourceImpl(client)
+        await(source)
 
         val first = source.getNearestFrame(1000000L)
         assertEquals(1000000L, first?.first)
@@ -100,6 +113,7 @@ class RainViewerTimestampSourceImplTest {
     fun `returns null when API returns empty past array`() {
         val client = mockOkHttp("""{"radar":{"past":[]}}""")
         val source = RainViewerTimestampSourceImpl(client)
+        await(source)
         assertNull(source.getNearestFrame(1000000L))
     }
 
@@ -109,6 +123,7 @@ class RainViewerTimestampSourceImplTest {
             """{"radar":{"past":[{"time":1000000,"path":"/v2/radar/1000000"},{"time":1000600,"path":"/v2/radar/1000600"},{"time":1001200,"path":"/v2/radar/1001200"}]}}"""
         )
         val source = RainViewerTimestampSourceImpl(client)
+        await(source)
         val frame = source.getNearestFrame(1000700L)
         assertEquals(1000600L, frame?.first)
         assertEquals("/v2/radar/1000600", frame?.second)
@@ -120,6 +135,7 @@ class RainViewerTimestampSourceImplTest {
             """{"radar":{"past":[{"time":1000000,"path":"/v2/radar/1000000"},{"time":1000600,"path":"/v2/radar/1000600"}]}}"""
         )
         val source = RainViewerTimestampSourceImpl(client)
+        await(source)
         val frame = source.getNearestFrame(1000600L)
         assertEquals(1000600L, frame?.first)
         assertEquals("/v2/radar/1000600", frame?.second)
@@ -131,12 +147,15 @@ class RainViewerTimestampSourceImplTest {
             """{"radar":{"past":[{"time":1000000,"path":"/v2/radar/1000000"}]}}"""
         )
         val source = RainViewerTimestampSourceImpl(loadClient)
+        await(source)
         assertEquals(1000000L, source.getNearestFrame(1000000L)?.first)
 
         source.clearCache()
+        await(source)
 
         val failClient = mockFailingClient()
         val source2 = RainViewerTimestampSourceImpl(failClient)
+        await(source2)
         assertNull(source2.getNearestFrame(1000000L))
     }
 }

@@ -1,5 +1,23 @@
 package app.pursi.weather
 
+/**
+ * Returns the forecast point representing "now" — the first point whose timestamp
+ * is at or after the start of the current hour, so the wind meter and current
+ * conditions show the forecast for the hour the user is currently in.
+ *
+ * FMI timeseries returns forecast (not past observations); the conventional
+ * "current" reading is the forecast hour containing now, not the most recent
+ * past point. Falls back to the last point if `now` is past the series end.
+ */
+fun currentForecastPoint(
+    forecast: List<ForecastPoint>,
+    nowSec: Long = System.currentTimeMillis() / 1000L
+): ForecastPoint? {
+    if (forecast.isEmpty()) return null
+    val ceilHour = ((nowSec + 3599L) / 3600L) * 3600L
+    return forecast.firstOrNull { it.timestamp >= ceilHour } ?: forecast.lastOrNull()
+}
+
 fun warningColorHex(color: String): Long = when (color) {
     "yellow" -> 0xFFFFB300L; "orange" -> 0xFFFF6F00L; "red" -> 0xFFD50000L; else -> 0xFF9E9E9EL
 }

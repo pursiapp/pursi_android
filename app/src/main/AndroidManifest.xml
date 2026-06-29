@@ -44,11 +44,6 @@
             android:foregroundServiceType="location"
             android:exported="false" />
 
-        <service
-            android:name=".weather.WarningService"
-            android:foregroundServiceType="dataSync"
-            android:exported="false" />
-
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"

@@ -9,6 +9,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.xmlpull.v1.XmlPullParser
 import org.xmlpull.v1.XmlPullParserFactory
+import app.pursi.datasource.core.WeatherProviderException
 import java.io.IOException
 import java.io.StringReader
 import java.net.URLEncoder
@@ -48,15 +49,36 @@ class FmiClient @Inject constructor(
         latitude: Double, longitude: Double
     ): List<ForecastPoint> = withContext(Dispatchers.IO) {
         try {
-            // Compute endtime 5 days from now in ISO format
-            val cal = java.util.Calendar.getInstance()
-            cal.add(java.util.Calendar.DAY_OF_YEAR, 5)
+            // Floor "now" to the current UTC hour so the first returned point maps
+            // deterministically to that hour (FMI timeseries returns no per-point
+            // timestamps — verified: param=ts yields null).
+            val nowMs = System.currentTimeMillis()
+            val startCal = java.util.Calendar.getInstance(java.util.TimeZone.getTimeZone("UTC"))
+            startCal.timeInMillis = nowMs
+            startCal.set(java.util.Calendar.MINUTE, 0)
+            startCal.set(java.util.Calendar.SECOND, 0)
+            startCal.set(java.util.Calendar.MILLISECOND, 0)
+            val requestedStartSec = startCal.timeInMillis / 1000L
+
+            // Endtime 5 days from now in ISO format
+            val endCal = startCal.clone() as java.util.Calendar
+            endCal.add(java.util.Calendar.DAY_OF_YEAR, 5)
             val sdf = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", java.util.Locale.US)
             sdf.timeZone = java.util.TimeZone.getTimeZone("UTC")
-            val endtime = sdf.format(cal.time)
-            val json = fetchUrl("$tsBase?latlon=$latitude,$longitude&param=t2m,FF,DD,Pressure,WeatherSymbol,Cloudiness,Precipitation1h&format=json&endtime=$endtime")
-            parseForecastJson(json)
-        } catch (e: CancellationException) { throw e } catch (_: Exception) { emptyList() }
+            val starttime = sdf.format(startCal.time)
+            val endtime = sdf.format(endCal.time)
+            val requestedEndSec = endCal.timeInMillis / 1000L
+
+            val json = fetchUrl("$tsBase?latlon=$latitude,$longitude" +
+                "&param=t2m,FF,DD,Pressure,WeatherSymbol,Cloudiness,Precipitation1h" +
+                "&format=json&starttime=$starttime&endtime=$endtime")
+            parseForecastJson(json, requestedStartSec, requestedEndSec)
+        } catch (e: CancellationException) { throw e } catch (e: WeatherProviderException) {
+            throw e
+        } catch (e: Exception) {
+            // Network/IO failure — wrap so the repo / composite can decide what to do.
+            throw WeatherProviderException("FMI forecast fetch failed: ${e.message}", e)
+        }
     }
 
     suspend fun getMareographData(
@@ -367,12 +389,41 @@ class FmiClient @Inject constructor(
 
     // ── Forecast (timeseries JSON) ─────────────────────────────────────
 
-    private fun parseForecastJson(jsonStr: String): List<ForecastPoint> {
+    /**
+     * FMI timeseries returns a flat array of parameter objects with NO per-point
+     * timestamps (verified: param=ts yields null). We anchor the array to the
+     * requested start/end, which gives a deterministic mapping:
+     *  - count == expected  → start-anchor: ts[i] = start + i*3600
+     *  - count < expected   → end-anchor:   ts[i] = end - (n-1-i)*3600
+     *                          (FMI may drop the leading partial hours at model-run
+     *                           boundaries; the recent points are what the wind
+     *                           meter and forecast tab care about)
+     *  - count > expected OR empty → throw [WeatherProviderException]
+     */
+    private fun parseForecastJson(
+        jsonStr: String,
+        requestedStartSec: Long,
+        requestedEndSec: Long
+    ): List<ForecastPoint> {
         val entries = json.decodeFromString<List<ForecastEntry>>(jsonStr)
-        val now = System.currentTimeMillis() / 1000
+        if (entries.isEmpty()) {
+            throw WeatherProviderException("FMI forecast: empty response (no hourly data)")
+        }
+        val expected = ((requestedEndSec - requestedStartSec) / 3600L) + 1L
+        val n = entries.size.toLong()
+        if (n > expected) {
+            throw WeatherProviderException("FMI forecast: unexpected shape (got $n, expected $expected)")
+        }
         return entries.mapIndexed { i, e ->
+            val timestamp = if (n == expected) {
+                requestedStartSec + i * 3600L
+            } else {
+                // short count → end-anchor; recent points are correctly labelled
+                requestedEndSec - ((n - 1 - i) * 3600L)
+            }
             ForecastPoint(
-                timestamp = now + i * 3600,
+                timestamp = timestamp,
+                referenceTime = requestedStartSec,
                 temperatureC = e.t2m,
                 windSpeedMs = e.FF,
                 windDirectionDeg = e.DD,
