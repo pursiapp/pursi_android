@@ -45,6 +45,9 @@
     <string name="hour_forecast">24-Hour Forecast for This Location</string>
     <string name="loading">Loading…</string>
     <string name="loading_forecast">Loading forecast…</string>
+    <string name="weather_unavailable">Weather data unavailable</string>
+    <string name="forecast_unavailable">Forecast unavailable</string>
+    <string name="retry">Retry</string>
     <string name="coming_soon">Coming soon.</string>
     <string name="ms">m/s</string>
     <string name="no_warnings">No active warnings.</string>

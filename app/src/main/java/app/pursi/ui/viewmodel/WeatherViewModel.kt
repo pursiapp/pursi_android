@@ -58,6 +58,7 @@ class WeatherViewModel @Inject constructor(
     val lightning: StateFlow<List<LightningStrike>> = repository.lightning
     val waterLevel: StateFlow<List<WaterLevelStation>> = repository.waterLevel
     val isRefreshing: StateFlow<Boolean> = repository.isRefreshing
+    val error: StateFlow<String?> = repository.error
 
     val currentLocation = locationStateHolder.currentLocation
 

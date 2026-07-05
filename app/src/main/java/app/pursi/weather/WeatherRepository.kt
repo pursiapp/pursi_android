@@ -314,23 +314,17 @@ class WeatherRepository @Inject constructor(
     }
 
     private suspend fun doRefresh(force: Boolean) {
-        val location = withTimeoutOrNull(20_000L) {
-            locationStateHolder.currentLocation.filterNotNull().firstOrNull()
-        }
-        if (location == null) return
-        val lat = location.latitude
-        val lon = location.longitude
-        val now = System.currentTimeMillis()
-
-        if (!force && !shouldRefreshCore(lat, lon, now)) return
-
         _isRefreshing.value = true
         _error.value = null
         try {
-            refreshCoreData(lat, lon, now)
-            if (force || shouldRefreshForecast(now)) {
-                refreshForecastOnly(lat, lon)
+            val location = withTimeoutOrNull(20_000L) {
+                locationStateHolder.currentLocation.filterNotNull().firstOrNull()
             }
+            if (location == null) return
+            val lat = location.latitude; val lon = location.longitude; val now = System.currentTimeMillis()
+            if (!force && !shouldRefreshCore(lat, lon, now)) return
+            refreshCoreData(lat, lon, now)
+            if (force || shouldRefreshForecast(now)) refreshForecastOnly(lat, lon)
         } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (e: Exception) {
             _error.value = e.message ?: "Weather data refresh failed"
         } finally {

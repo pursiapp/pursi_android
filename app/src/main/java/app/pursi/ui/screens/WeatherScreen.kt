@@ -19,6 +19,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
@@ -110,6 +111,7 @@ fun WeatherContent(
     val forecast by weatherViewModel.forecast.collectAsStateWithLifecycle()
     val warnings by weatherViewModel.warnings.collectAsStateWithLifecycle()
     val isRefreshing by weatherViewModel.isRefreshing.collectAsStateWithLifecycle()
+    val error by weatherViewModel.error.collectAsStateWithLifecycle()
     val selectedTab by weatherViewModel.selectedTab.collectAsStateWithLifecycle()
     val faves by weatherViewModel.faves.collectAsStateWithLifecycle()
     val algaeObs by weatherViewModel.algaeObservations.collectAsStateWithLifecycle()
@@ -143,6 +145,9 @@ fun WeatherContent(
                 stations = stations,
                 waves = waves,
                 waterLevel = waterLevel,
+                isRefreshing = isRefreshing,
+                error = error,
+                onRetry = { weatherViewModel.refresh(force = true) },
                 faves = faves,
                 onToggleFave = { name -> weatherViewModel.toggleFave(name) },
                 refLat = location?.latitude ?: 60.0,
@@ -151,7 +156,14 @@ fun WeatherContent(
                 tempObs = tempObs,
                 onAlgaeClick = { lat, lon -> weatherViewModel.setAlgaeTarget(lat, lon) }
             )
-            1 -> ForecastTab(forecast, location?.latitude ?: 60.0, location?.longitude ?: 24.0)
+             1 -> ForecastTab(
+                forecast = forecast,
+                isRefreshing = isRefreshing,
+                error = error,
+                onRetry = { weatherViewModel.refresh(force = true) },
+                lat = location?.latitude ?: 60.0,
+                lon = location?.longitude ?: 24.0
+            )
             2 -> WarningsTab(warnings)
             }
         }
@@ -164,21 +176,14 @@ fun WeatherContent(
 private fun ConditionsTab(
     stations: List<StationWeatherData>, waves: List<WaveStation>,
     waterLevel: List<WaterLevelStation>,
+    isRefreshing: Boolean, error: String?, onRetry: () -> Unit,
     faves: Set<String>, onToggleFave: (String) -> Unit,
     refLat: Double = 60.0, refLon: Double = 24.0,
     algaeObs: List<WaterObservation> = emptyList(),
     tempObs: List<WaterObservation> = emptyList(),
     onAlgaeClick: (Double, Double) -> Unit = { _, _ -> }
 ) {
-    if (stations.isEmpty() && waves.isEmpty()) {
-        Column(modifier = Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            CircularProgressIndicator()
-            Spacer(Modifier.height(8.dp))
-            Text(stringResource(R.string.loading),
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
-        }
-        return
-    }
+    if (stations.isNotEmpty() || waves.isNotEmpty()) {
     LazyColumn(modifier = Modifier.padding(horizontal = 16.dp)) {
         items(stations.filter { it.station.stationName in faves }) { s ->
             StationCard(s, true, onToggleFave, refLat, refLon); Spacer(Modifier.height(8.dp))
@@ -224,6 +229,29 @@ private fun ConditionsTab(
                 Text(stringResource(R.string.algae_bloom),
                     style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold) }
             items(nearest) { o -> WaterObsCard(o, refLat, refLon, onAlgaeClick); Spacer(Modifier.height(8.dp)) }
+        }
+    }
+        return
+    }
+    Column(Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        when {
+            isRefreshing -> {
+                CircularProgressIndicator()
+                Spacer(Modifier.height(8.dp))
+                Text(stringResource(R.string.loading),
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+            }
+            error != null -> {
+                Text(error, color = MaterialTheme.colorScheme.error)
+                Spacer(Modifier.height(12.dp))
+                Button(onClick = onRetry) { Text(stringResource(R.string.onboarding_offline_retry)) }
+            }
+            else -> {
+                Text(stringResource(R.string.weather_unavailable),
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                Spacer(Modifier.height(12.dp))
+                Button(onClick = onRetry) { Text(stringResource(R.string.onboarding_offline_retry)) }
+            }
         }
     }
 }
@@ -392,16 +420,12 @@ fun CelestialBlock(icon: String, time: String) {
 
 
 @Composable
-private fun ForecastTab(forecast: List<ForecastPoint>, lat: Double, lon: Double) {
-    if (forecast.isEmpty()) {
-        Column(Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            CircularProgressIndicator()
-            Spacer(Modifier.height(8.dp))
-            Text(stringResource(R.string.loading_forecast),
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
-        }
-        return
-    }
+private fun ForecastTab(
+    forecast: List<ForecastPoint>,
+    isRefreshing: Boolean, error: String?, onRetry: () -> Unit,
+    lat: Double, lon: Double
+) {
+    if (forecast.isNotEmpty()) {
     // Sunrise/sunset and moonrise/moonset
     val now = System.currentTimeMillis() / 1000L
     val (sunrise, sunset) = sunriseSunset(lat, lon, now)
@@ -499,6 +523,29 @@ private fun ForecastTab(forecast: List<ForecastPoint>, lat: Double, lon: Double)
                         }
                     }
                 }
+            }
+        }
+    }
+        return
+    }
+    Column(Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        when {
+            isRefreshing -> {
+                CircularProgressIndicator()
+                Spacer(Modifier.height(8.dp))
+                Text(stringResource(R.string.loading_forecast),
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+            }
+            error != null -> {
+                Text(error, color = MaterialTheme.colorScheme.error)
+                Spacer(Modifier.height(12.dp))
+                Button(onClick = onRetry) { Text(stringResource(R.string.onboarding_offline_retry)) }
+            }
+            else -> {
+                Text(stringResource(R.string.forecast_unavailable),
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                Spacer(Modifier.height(12.dp))
+                Button(onClick = onRetry) { Text(stringResource(R.string.onboarding_offline_retry)) }
             }
         }
     }

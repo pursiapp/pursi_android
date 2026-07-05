@@ -10,6 +10,7 @@ import okhttp3.Request
 import org.xmlpull.v1.XmlPullParser
 import org.xmlpull.v1.XmlPullParserFactory
 import app.pursi.datasource.core.WeatherProviderException
+import android.util.Log
 import java.io.IOException
 import java.io.StringReader
 import java.net.URLEncoder
@@ -19,6 +20,9 @@ import javax.inject.Inject
 class FmiClient @Inject constructor(
     private val client: OkHttpClient
 ) {
+    companion object {
+        private const val TAG = "FmiClient"
+    }
 
     private val json = Json { ignoreUnknownKeys = true }
 
@@ -32,7 +36,9 @@ class FmiClient @Inject constructor(
             val xml = fetchXml("$wfsBase?request=GetFeature&storedquery_id=fmi::observations::weather::multipointcoverage" +
                 "&bbox=${longitude - 1},${latitude - 1},${longitude + 1},${latitude + 1}&maxfeatures=$maxStations&format=text/xml")
             parseStationData(xml, latitude, longitude, maxStations)
-        } catch (e: CancellationException) { throw e } catch (_: Exception) { emptyList() }
+        } catch (e: CancellationException) { throw e } catch (e: Exception) {
+            Log.w(TAG, "getNearestWeatherStations failed", e); emptyList()
+        }
     }
 
     suspend fun getWaveObservations(
@@ -42,7 +48,9 @@ class FmiClient @Inject constructor(
             val xml = fetchXml("$wfsBase?request=GetFeature&storedquery_id=fmi::observations::wave::multipointcoverage" +
                 "&bbox=${longitude - 2},${latitude - 2},${longitude + 2},${latitude + 2}&maxfeatures=3&format=text/xml")
             parseWaveData(xml, latitude, longitude)
-        } catch (e: CancellationException) { throw e } catch (_: Exception) { emptyList() }
+        } catch (e: CancellationException) { throw e } catch (e: Exception) {
+            Log.w(TAG, "getWaveObservations failed", e); emptyList()
+        }
     }
 
     suspend fun getForecast(
@@ -88,7 +96,9 @@ class FmiClient @Inject constructor(
             val xml = fetchXml("$wfsBase?request=GetFeature&storedquery_id=fmi::observations::mareograph::multipointcoverage" +
                 "&bbox=${longitude - 2},${latitude - 2},${longitude + 2},${latitude + 2}&maxfeatures=3&format=text/xml")
             parseMareographData(xml, latitude, longitude)
-        } catch (e: CancellationException) { throw e } catch (_: Exception) { emptyList() }
+        } catch (e: CancellationException) { throw e } catch (e: Exception) {
+            Log.w(TAG, "getMareographData failed", e); emptyList()
+        }
     }
 
     suspend fun getLightningData(
@@ -98,7 +108,9 @@ class FmiClient @Inject constructor(
             val xml = fetchXml("$wfsBase?request=GetFeature&storedquery_id=fmi::observations::lightning::multipointcoverage" +
                 "&bbox=$minLng,$minLat,$maxLng,$maxLat&format=text/xml")
             parseLightning(xml)
-        } catch (e: CancellationException) { throw e } catch (_: Exception) { emptyList() }
+        } catch (e: CancellationException) { throw e } catch (e: Exception) {
+            Log.w(TAG, "getLightningData failed", e); emptyList()
+        }
     }
 
     suspend fun getMarineWarnings(language: String = "fi", latitude: Double = 0.0, longitude: Double = 0.0): List<MarineWarning> = withContext(Dispatchers.IO) {
@@ -106,7 +118,9 @@ class FmiClient @Inject constructor(
             val langSuffix = when (language) { "sv" -> "sv-FI"; "en" -> "en-GB"; else -> "fi-FI" }
             val xml = fetchUrl("https://alerts.fmi.fi/cap/feed/atom_$langSuffix.xml")
             parseCapWarnings(xml, latitude, longitude, langSuffix)
-        } catch (e: CancellationException) { throw e } catch (_: Exception) { emptyList() }
+        } catch (e: CancellationException) { throw e } catch (e: Exception) {
+            Log.w(TAG, "getMarineWarnings failed", e); emptyList()
+        }
     }
 
     private fun fetchXml(url: String): String = fetchUrl(url)
