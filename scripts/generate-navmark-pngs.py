@@ -30,10 +30,25 @@ for svg_path in svg_files:
     stem = str(rel).replace("/", "_").replace(".svg", "")
     png_name = f"josm_{stem}.png"
     png_path = OUT_DIR / png_name
+
+    # Q126 waterway signs have a square viewBox (200×200). All other JOSM
+    # icons (buoys, beacons, barrels, etc.) are designed for the navmark
+    # 60×120 canvas. Render Q126 at a square 60×60 to avoid distortion.
+    is_q126 = "Q126" in rel.parts
+    w = 60
+    h = 60 if is_q126 else 120
+
+    # Skip if the file exists and already has the right dimensions.
+    # Q126 files may exist at the wrong 60×120 size from a previous run;
+    # delete them so we regenerate at the correct square size.
     if png_path.exists():
-        continue
+        if is_q126:
+            png_path.unlink()
+        else:
+            continue
+
     result = subprocess.run(
-        ["rsvg-convert", "-w", str(PNG_W), "-h", str(PNG_H),
+        ["rsvg-convert", "-w", str(w), "-h", str(h),
          str(svg_path), "-o", str(png_path)],
         capture_output=True
     )

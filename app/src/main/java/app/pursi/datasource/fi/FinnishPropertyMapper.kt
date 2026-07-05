@@ -8,6 +8,28 @@ import javax.inject.Singleton
 class FinnishPropertyMapper @Inject constructor() : PropertyMapper {
     override val providerId = "fi-vayla-traficom"
 
+    // The online WFS path stores WfsFeature rows with `source = source.name` (e.g.
+    // "vayla_turvalaitteet") rather than the providerId. Accept every name from the
+    // fi-vayla-traficom config so the mapper lookup works for both online and
+    // offline (VvDataDownloader) data.
+    private val handledSources: Set<String> = setOf(
+        "vayla_lights",
+        "vayla_navlines",
+        "vayla_daymarks",
+        "vayla_restrictions",
+        "vayla_fairways_1",
+        "vayla_fairways_2",
+        "vayla_turvalaitteet",
+        "vayla_turvalaitteet_muut",
+        "vayla_turvalaiteviat_kmk",
+        "vayla_turvalaiteviat_matala",
+        "vayla_valosektorit",
+        "vayla_vesiliikennemerkit"
+    )
+
+    override fun matchesSource(source: String): Boolean =
+        providerId == source || source in handledSources
+
     override fun mapKey(providerKey: String): String? = when (providerKey) {
         "turvalaitetyyppifi" -> "aton_type"
         "alityyppi" -> "structure_type"
@@ -61,7 +83,7 @@ class FinnishPropertyMapper @Inject constructor() : PropertyMapper {
         }
         "structure_type" -> when (providerValue) {
             "KELLUVA" -> "floating"
-            "KIINTEA" -> "fixed"
+            "KIINTEÄ", "KIINTEA" -> "fixed"
             else -> providerValue
         }
         "colour" -> when (providerValue) {

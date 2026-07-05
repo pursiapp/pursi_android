@@ -32,8 +32,11 @@ import app.pursi.datasource.core.Regions
 import app.pursi.map.PursiMapView
 import app.pursi.ui.viewmodel.FollowMode
 import app.pursi.ui.viewmodel.MapViewModel
+import app.pursi.ui.viewmodel.SeamarkDetail
+import app.pursi.ui.viewmodel.SeamarkSource
 import app.pursi.DEFAULT_LAT
 import app.pursi.DEFAULT_LON
+import org.maplibre.android.maps.MapLibreMap
 import app.pursi.ui.viewmodel.OrientationMode
 import kotlinx.coroutines.launch
 import org.maplibre.android.geometry.LatLng
@@ -44,6 +47,72 @@ import java.util.UUID
 
 private const val PREFS_NAME = "pursi_map"
 private const val KEY_CHART_OPACITY = "chart_opacity"
+
+/**
+ * OpenStreetMap / OpenSeaMap click fallback. Queries the rendered MapLibre layers
+ * around the click point for a seamark feature that has no `_vv_id` (i.e. not
+ * Väylävirasto data) and returns a [SeamarkDetail] built from its properties.
+ *
+ * Returns null when no OSM seamark is at the click point. Callers should always
+ * first try [MapViewModel.findSeamarkAt] to prefer national/marine data; this
+ * helper is the fallback for outside-Finland (or OSM-only) sea marks.
+ */
+private fun buildOsmSeamarkAt(map: MapLibreMap, clickLat: Double, clickLng: Double): SeamarkDetail? {
+    fun humanReadableOsmSeamarkType(osmType: String): String = when (osmType) {
+        "beacon_cardinal" -> "Viittamerkki"
+        "beacon_isolated_danger" -> "Karioviitta"
+        "beacon_lateral" -> "Lateraaliviitta"
+        "beacon_safe_water" -> "Turvavesiviitta"
+        "beacon_special_purpose" -> "Erikoisviitta"
+        "buoy_cardinal" -> "Viittapoiju"
+        "buoy_isolated_danger" -> "Kariopoiju"
+        "buoy_lateral" -> "Lateraalipoiju"
+        "buoy_safe_water" -> "Turvavesipoiju"
+        "buoy_special_purpose" -> "Erikoispoiju"
+        "buoy_installation" -> "Poiju (asennus)"
+        "light_major" -> "Majakka"
+        "light_minor" -> "Valo"
+        "light_vessel" -> "Valolaiva"
+        "daymark" -> "Päivämerkki"
+        "fog_signal" -> "Sumumerkki"
+        "wreck" -> "Hylky"
+        "hulk" -> "Hylky (hylätty alus)"
+        "pontoon" -> "Ponttoni"
+        "mooring" -> "Kiinnityspoiju"
+        "signal_station_warning" -> "Varoitusasema"
+        else -> osmType.replace("_", " ")
+    }
+    val sp = map.projection.toScreenLocation(org.maplibre.android.geometry.LatLng(clickLat, clickLng))
+    val rect = android.graphics.RectF(sp.x - 20f, sp.y - 20f, sp.x + 20f, sp.y + 20f)
+    val allHit = map.queryRenderedFeatures(rect)
+    val osmHit = allHit.firstOrNull { feat ->
+        feat.getNumberProperty("_vv_id") == null &&
+            (feat.getStringProperty("seamark:type") != null ||
+                feat.getStringProperty("seamark:name") != null)
+    } ?: return null
+    val osmType = osmHit.getStringProperty("seamark:type") ?: ""
+    val name = osmHit.getStringProperty("seamark:name")
+        ?: osmHit.getStringProperty("ref")
+        ?: osmHit.getStringProperty("name")
+        ?: ""
+    val hasLight = osmHit.getStringProperty("seamark:light:character") != null ||
+        osmHit.getStringProperty("seamark:light:colour") != null
+    val lightParts = mutableListOf<String>()
+    osmHit.getStringProperty("seamark:light:character")?.let { lightParts.add(it) }
+    osmHit.getStringProperty("seamark:light:colour")?.let { lightParts.add(it) }
+    osmHit.getStringProperty("seamark:light:period")?.let { lightParts.add("${it}s") }
+    return SeamarkDetail(
+        source = SeamarkSource.OSM,
+        name = name,
+        typeLabel = humanReadableOsmSeamarkType(osmType),
+        hasLight = hasLight,
+        lightCharacteristic = lightParts.joinToString(" ").takeIf { it.isNotBlank() },
+        description = osmType.replace("_", " "),
+        extraInfo = listOf("OpenSeaMap"),
+        latitude = clickLat,
+        longitude = clickLng
+    )
+}
 
 @Composable
 fun MapScreen(
@@ -199,6 +268,7 @@ fun MapScreen(
     var zoomToBoatLevel by remember { mutableStateOf(initialCamZoom.toFloat()) }
     var mapBearing by remember { mutableStateOf(0f) }
     var viewportBounds by remember { mutableStateOf<BoundingBox?>(null) }
+    var mapRef by remember { mutableStateOf<MapLibreMap?>(null) }
 
     // Route planning state (persisted across rotation via saveable)
     var routeWaypoints by remember { mutableStateOf<List<LatLng>>(emptyList()) }
@@ -380,16 +450,37 @@ fun MapScreen(
             vvFetchCounter = uiState.fiState?.vvFetchCounter ?: 0,
             showSectors = mapViewModel.isSectorVisible(isNightMode),
             viewportBounds = viewportBounds,
-            onTurvalaiteClick = { id ->
-                val allFeatures = (uiState.fiState?.turvalaiteFeatures?.values?.flatten() ?: emptyList())
-                val feature = allFeatures.firstOrNull { it.id == id }
-                if (feature != null) {
-                    val detail = mapViewModel.buildTurvalaiteDetail(feature)
-                    mapViewModel.selectSeamark(detail)
+            onSeamarkClick = { lat, lng ->
+                // 1) Prefer Väylävirasto / national marine data (render-independent lookup
+                //    against the cached WfsFeature list).
+                var detail = mapViewModel.findSeamarkAt(lat, lng)
+                // 2) Fall back to OpenStreetMap / OpenSeaMap. For each OSM seamark hit
+                //    re-run the marine check at the OSM feature's coordinates — if a
+                //    national feature is registered at the same point, it wins.
+                if (detail == null) {
+                    val map = mapRef
+                    val osmDetail = map?.let { buildOsmSeamarkAt(it, lat, lng) }
+                    if (osmDetail != null) {
+                        val vvOverride = mapViewModel.findSeamarkAt(osmDetail.latitude, osmDetail.longitude)
+                        detail = vvOverride ?: osmDetail
+                    }
                 }
-            },
-            onOsmSeamarkClick = { detail ->
-                mapViewModel.selectSeamark(detail)
+                if (detail != null) {
+                    mapViewModel.selectSeamark(detail)
+                } else {
+                    // 3) Bare-map click logic (formerly in onMapClick).
+                    if (mockLocationPending) {
+                        mapViewModel.setMockLocation(lat, lng)
+                        mockLocationPending = false
+                    } else {
+                        val ll = LatLng(lat, lng)
+                        if (measureMode) {
+                            measurePoints = if (measurePoints.size >= 2) listOf(ll) else measurePoints + ll
+                        }
+                        if (selectedVesselMmsi != null) selectedVesselMmsi = null
+                        mapViewModel.clearSeamark()
+                    }
+                }
             },
             onAlgaeObservationClick = { idx ->
                 val clicked = uiState.waterObservations.getOrNull(idx)
@@ -401,19 +492,8 @@ fun MapScreen(
                     mapViewModel.selectAlgaeObservations(same)
                 }
             },
-            onMapClick = { latlng ->
-                if (mockLocationPending) {
-                    mapViewModel.setMockLocation(latlng.latitude, latlng.longitude)
-                    mockLocationPending = false
-                } else {
-                    if (measureMode) {
-                        measurePoints = if (measurePoints.size >= 2) listOf(latlng) else measurePoints + latlng
-                    }
-                    if (selectedVesselMmsi != null) selectedVesselMmsi = null
-                    mapViewModel.clearSeamark()
-                }
-            },
-            onMapReady = { },
+            onMapReady = { map -> mapRef = map },
+            onMapClick = { /* now handled in onSeamarkClick */ },
             onVesselClick = { mmsi ->
                 selectedVesselMmsi = if (selectedVesselMmsi == mmsi) null else mmsi
                 mapViewModel.fetchVesselMetadata(mmsi)

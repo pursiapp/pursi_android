@@ -8,7 +8,8 @@ data class LayerDefinition(
     val layerId: String,
     val sourceId: String,
     val type: LayerType,
-    val styleProperties: Map<String, Any> = emptyMap()
+    val styleProperties: Map<String, Any> = emptyMap(),
+    val minZoom: Float? = null
 )
 
 enum class LayerType {

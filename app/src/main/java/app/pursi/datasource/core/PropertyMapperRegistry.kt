@@ -7,6 +7,6 @@ import javax.inject.Singleton
 class PropertyMapperRegistry @Inject constructor(
     private val mappers: Set<PropertyMapper>
 ) {
-    fun getMapper(providerId: String): PropertyMapper? =
-        mappers.find { it.providerId == providerId }
+    fun getMapper(source: String): PropertyMapper? =
+        mappers.find { it.matchesSource(source) }
 }

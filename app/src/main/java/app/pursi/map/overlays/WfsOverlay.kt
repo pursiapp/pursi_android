@@ -3,8 +3,8 @@ package app.pursi.map.overlays
 import app.pursi.data.model.WfsFeature
 import app.pursi.water.WaterObservation
 import app.pursi.datasource.core.BoundingBox
+import app.pursi.datasource.core.FeatureRendererRegistry
 import app.pursi.datasource.fi.TurvalaiteIconMapper
-import app.pursi.datasource.fi.VesiLiikennemerkkiIconMapper
 import app.pursi.map.WfsLayerManager
 import app.pursi.ui.viewmodel.NavmarkSize
 import org.maplibre.android.maps.Style
@@ -64,7 +64,9 @@ object WfsOverlay {
             for (featureType in listOf("depth_sounding", "depth_contour", "depth_area", "unsurveyed_area")) {
                 if (featureType in activeTypes) {
                     prepared[featureType]?.let { collection ->
-                        WfsLayerManager.addPreparedFeatures(style, collection, featureType, isNightMode = isNightMode)
+                        WfsLayerManager.addPreparedFeatures(
+                            style, "depth", collection, featureType, isNightMode = isNightMode
+                        )
                     }
                 } else {
                     WfsLayerManager.removeFeatures(style, featureType)
@@ -92,8 +94,8 @@ object WfsOverlay {
                         else -> null
                     }
                     if (feat != null) {
-                        feat.addStringProperty("label", WfsLayerManager.extractLabel(feature, "turvalaite"))
-                        feat.addStringProperty("type", "turvalaite")
+                        feat.addStringProperty("label", WfsLayerManager.extractLabel(feature, "navigation_aid"))
+                        feat.addStringProperty("type", "navigation_aid")
                         feat.addNumberProperty("_vv_id", feature.id.toDouble())
                         val turvalaiteType = TurvalaiteIconMapper.extractProperty(feature.properties, "turvalaitetyyppifi") ?: ""
                         val alityyppi = TurvalaiteIconMapper.extractProperty(feature.properties, "alityyppi") ?: ""
@@ -113,8 +115,8 @@ object WfsOverlay {
             val geoFeatures = features.mapNotNull { feature ->
                 try {
                     val feat = Feature.fromGeometry(Point.fromLngLat(feature.longitude, feature.latitude))
-                    feat.addStringProperty("label", WfsLayerManager.extractLabel(feature, "turvalaitevika"))
-                    feat.addStringProperty("type", "turvalaitevika")
+                    feat.addStringProperty("label", WfsLayerManager.extractLabel(feature, "aton_fault"))
+                    feat.addStringProperty("type", "aton_fault")
                     feat.addNumberProperty("_vv_id", feature.id.toDouble())
                     feat
                 } catch (_: Exception) { null }
@@ -142,28 +144,19 @@ object WfsOverlay {
         prepared: Map<String, FeatureCollection>?,
         hasFeaturesInView: Boolean,
         navmarkSizeMultiplier: Float,
-        isNightMode: Boolean
+        isNightMode: Boolean,
+        chartOpacity: Float = 0f
     ) {
         if (prepared == null || !hasFeaturesInView) {
-            WfsLayerManager.removeFeatures(style, "turvalaite")
-            WfsLayerManager.removeFeatures(style, "turvalaitevika")
-            style.getLayer("DYNAMIC_icon_fixed_rotation")?.setProperties(
-                PropertyFactory.visibility(Property.VISIBLE)
-            )
-            style.getLayer("DYNAMIC_icon_free_rotation")?.setProperties(
-                PropertyFactory.visibility(Property.VISIBLE)
-            )
+            WfsLayerManager.removeFeatures(style, "navigation_aid")
+            WfsLayerManager.removeFeatures(style, "aton_fault")
         } else {
-            style.getLayer("DYNAMIC_icon_fixed_rotation")?.setProperties(
-                PropertyFactory.visibility(Property.NONE)
-            )
-            style.getLayer("DYNAMIC_icon_free_rotation")?.setProperties(
-                PropertyFactory.visibility(Property.NONE)
-            )
             for ((sourceName, collection) in prepared) {
-                val featureType = if (sourceName.startsWith("vika_")) "turvalaitevika" else "turvalaite"
-                WfsLayerManager.addPreparedFeatures(style, collection, featureType,
-                    navmarkSizeMultiplier = navmarkSizeMultiplier, isNightMode = isNightMode)
+                val featureType = if (sourceName.startsWith("vika_")) "aton_fault" else "navigation_aid"
+                WfsLayerManager.addPreparedFeatures(
+                    style, sourceName, collection, featureType,
+                    navmarkSizeMultiplier = navmarkSizeMultiplier, isNightMode = isNightMode
+                )
             }
         }
     }
@@ -181,48 +174,42 @@ object WfsOverlay {
         isNightMode: Boolean
     ) {
         if (!showVvNavmarks) {
-            WfsLayerManager.removeFeatures(style, "navline")
+            WfsLayerManager.removeFeatures(style, "navigation_line")
             WfsLayerManager.removeFeatures(style, "fairway")
-            WfsLayerManager.removeFeatures(style, "valosektori")
-            WfsLayerManager.removeFeatures(style, "vesiliikennemerkki")
+            WfsLayerManager.removeFeatures(style, "light_sector")
+            WfsLayerManager.removeFeatures(style, "notice")
             return
         }
 
         for ((_, features) in navlineFeatures) {
-            WfsLayerManager.addOrUpdateFeatures(style, features, "navline", isNightMode = isNightMode)
+            WfsLayerManager.addOrUpdateFeatures(style, features, "navigation_line", isNightMode = isNightMode)
         }
         for ((_, features) in fairwayFeatures) {
             WfsLayerManager.addOrUpdateFeatures(style, features, "fairway", isNightMode = isNightMode)
         }
         if (showSectors) {
-            for ((_, features) in valosektoriFeatures) {
+            for ((sourceName, features) in valosektoriFeatures) {
                 val polygons = valosektoriPolygons(features)
                 if (polygons != null) {
-                    WfsLayerManager.addPreparedFeatures(style, polygons, "valosektori", isNightMode = isNightMode)
+                    WfsLayerManager.addPreparedFeatures(
+                        style, sourceName, polygons, "light_sector", isNightMode = isNightMode
+                    )
                 } else {
-                    WfsLayerManager.removeFeatures(style, "valosektori")
+                    WfsLayerManager.removeFeatures(style, "light_sector")
                 }
             }
         } else {
-            WfsLayerManager.removeFeatures(style, "valosektori")
+            WfsLayerManager.removeFeatures(style, "light_sector")
         }
+        // Vesiliikennemerki rendering uses the same old rendering path as the
+        // turvalaite: addOrUpdateFeatures computes the GeoJSON features and
+        // then addPreparedFeatures creates the SymbolLayer with string-based
+        // icon interpolation ("{vesiliikennemerkki_icon}"). This is the same
+        // pipeline that works correctly for navigation_aid.
         for ((_, features) in vesiliikennemerkkiFeatures) {
-            val enriched = features.map { f ->
-                val vlmla = f.properties.lines().firstOrNull { it.startsWith("vlmlajityyppi=") }
-                    ?.substringAfter("=")?.trim()?.toIntOrNull() ?: 0
-                WfsFeature(
-                    id = f.id, source = f.source, featureType = f.featureType,
-                    geometry = f.geometry,
-                    properties = f.properties + "\nvesiliikennemerkki_icon=${VesiLiikennemerkkiIconMapper.toIconName(vlmla)}",
-                    latitude = f.latitude, longitude = f.longitude,
-                    minLat = f.minLat, minLng = f.minLng,
-                    maxLat = f.maxLat, maxLng = f.maxLng
-                )
-            }
-            WfsLayerManager.addOrUpdateFeatures(style, enriched, "vesiliikennemerkki", isNightMode = isNightMode)
+            WfsLayerManager.addOrUpdateFeatures(style, features, "notice", isNightMode = isNightMode)
         }
     }
-
     // ── Water observations ─────────────────────────────────────────
 
     fun updateWaterObservations(style: Style, showAlgae: Boolean, waterObservations: List<WaterObservation>) {

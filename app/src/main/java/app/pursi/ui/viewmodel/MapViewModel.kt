@@ -14,9 +14,8 @@ import app.pursi.data.dao.TrackDao
 import app.pursi.data.dao.TrackSummaryDao
 import app.pursi.data.model.WfsFeature
 import app.pursi.datasource.core.ChartProvider
+import app.pursi.datasource.core.FeatureRendererRegistry
 import app.pursi.datasource.core.SourceResolver
-import app.pursi.datasource.fi.TurvalaiteIconMapper
-import app.pursi.datasource.fi.VvSeamarkDeduplicator
 import app.pursi.ais.AisRepository
 import app.pursi.ais.AisVessel
 import app.pursi.ais.VesselMetadata
@@ -65,7 +64,8 @@ class MapViewModel @Inject constructor(
     private val weatherRepository: WeatherRepository,
     private val locationStateHolder: LocationStateHolder,
     private val aisRepository: AisRepository,
-    private val waterObservationRepository: WaterObservationRepository
+    private val waterObservationRepository: WaterObservationRepository,
+    private val featureRendererRegistry: FeatureRendererRegistry
 ) : ViewModel() {
     private val prefs = context.getSharedPreferences("pursi_map", Context.MODE_PRIVATE)
 
@@ -462,7 +462,11 @@ class MapViewModel @Inject constructor(
         if (zoom < MIN_ZOOM_FOR_VV) return
         val latSpan = maxLat - minLat
         val lngSpan = maxLng - minLng
-        val expand = TURVALAITE_BBOX_EXPAND
+        // Use a larger bbox expansion at high zoom to keep features in the
+        // cache longer and reduce re-fetch frequency (camera moves fast at
+        // high zoom; a small expansion means every tiny pan requires a new
+        // Room query even though the data is already cached).
+        val expand = if (zoom > 14) 6.0 else TURVALAITE_BBOX_EXPAND
         val qMinLat = (minLat - latSpan * expand).coerceAtLeast(58.0)
         val qMaxLat = (maxLat + latSpan * expand).coerceAtMost(71.0)
         val qMinLng = (minLng - lngSpan * expand).coerceAtLeast(19.0)
@@ -508,10 +512,10 @@ class MapViewModel @Inject constructor(
                 return result to usedNet
             }
 
-            val (turvalaiteResult, net1) = fetchGroup("turvalaite")
-            val (sektoriResult, net2) = fetchGroup("valosektori")
-            val (vesiMerkkiResult, net3) = fetchGroup("vesiliikennemerkki")
-            val (navlineResult, net4) = fetchGroup("navline")
+            val (turvalaiteResult, net1) = fetchGroup("navigation_aid")
+            val (sektoriResult, net2) = fetchGroup("light_sector")
+            val (vesiMerkkiResult, net3) = fetchGroup("notice")
+            val (navlineResult, net4) = fetchGroup("navigation_line")
             val (fairwayResult, net5) = fetchGroup("fairway")
 
             updateFiState {
@@ -557,57 +561,51 @@ class MapViewModel @Inject constructor(
         }
     }
 
-    fun buildTurvalaiteDetail(feature: WfsFeature): SeamarkDetail {
-        val props = feature.properties
-        fun get(key: String): String? {
-            return props.lines().firstOrNull { it.startsWith("$key=", ignoreCase = true) }
-                ?.substringAfter("=")?.trim()?.takeIf { it != "null" && it.isNotBlank() }
+    /**
+     * Geographic lookup for a marine (Väylävirasto / national provider) feature at the given
+     * coordinate. Returns the closest cached WfsFeature within [radiusMeters], then dispatches
+     * to the appropriate FeatureRenderer to build a SeamarkDetail.
+     *
+     * This is render-independent: it does not query MapLibre rendered features, so it works
+     * at any zoom, before fetches complete, and even when a layer is missing. Used by the
+     * click path to prioritize national/marine data over OpenStreetMap sea marks.
+     */
+    fun findSeamarkAt(lat: Double, lng: Double, radiusMeters: Double = 30.0): SeamarkDetail? {
+        val wfs = findWfsFeatureAt(lat, lng, radiusMeters) ?: return null
+        val renderer = featureRendererRegistry.getRenderer(wfs.featureType, wfs.source) ?: return null
+        return renderer.handleClick(wfs)
+    }
+
+    /**
+     * Find the closest cached marine WfsFeature within [radiusMeters] of (lat, lng).
+     * Searches across all marine feature buckets in fiState. Returns null if the cache
+     * has no features in range. Fault reports (turvalaitevika) are excluded because
+     * they have no click popup.
+     */
+    private fun findWfsFeatureAt(lat: Double, lng: Double, radiusMeters: Double): WfsFeature? {
+        val fi = fiState
+        val all: List<WfsFeature> = buildList {
+            for ((_, features) in fi.turvalaiteFeatures) addAll(features)
+            for ((_, features) in fi.valosektoriFeatures) addAll(features)
+            for ((_, features) in fi.vesiliikennemerkkiFeatures) addAll(features)
+            for ((_, features) in fi.navlineFeatures) addAll(features)
+            for ((_, features) in fi.fairwayFeatures) addAll(features)
         }
-        fun parseLoistoField(field: String): String? {
-            val raw = get(field) ?: return null
-            return raw.take(200)
+        if (all.isEmpty()) return null
+        val best = all.minBy {
+            val (dLng, dLat) = approxMetersOffset(it.latitude, it.longitude, lat, lng)
+            dLat * dLat + dLng * dLng
         }
-        val latitude = feature.latitude
-        val longitude = feature.longitude
-        val turvalaitetyyppiFi = get("turvalaitetyyppifi")
-        val alityyppi = get("alityyppi")
-        val navigointilajikoodi = get("navigointilajikoodi")
-        val kaytossa = get("toimintatilakoodi")?.let { it == "1" } ?: true
-        val valaistu = get("valaistu") == "K"
-        val valotunnus = parseLoistoField("loistojen_tiedot")
-        val sektori = parseLoistoField("valosektorien_tiedot")
-        val omistaja = get("omistaja")
-        val vayla = get("vaylan_nimi")
-        val mmsi = get("mmsi")?.toLongOrNull()
-        val aiskaytossa = get("aisfi") == "Kyllä"
-        val extra = mutableListOf<String>()
-        omistaja?.let { extra.add("Omistaja: $it") }
-        vayla?.let { extra.add("Väylä: $it") }
-        if (aiskaytossa && mmsi != null) extra.add("AIS MMSI: $mmsi")
-        return SeamarkDetail(
-            source = SeamarkSource.VV,
-            id = feature.id ?: 0L,
-            name = get("nimifi") ?: "",
-            subtitle = get("nimisv"),
-            typeLabel = turvalaitetyyppiFi,
-            statusLabel = if (kaytossa) "Käytössä" else "Poistettu",
-            structureLabel = alityyppi?.let { if (it == "KIINTEÄ") "Kiinteä" else "Kelluva" },
-            hasLight = valaistu,
-            lightCharacteristic = valotunnus,
-            description = TurvalaiteIconMapper.markDescription(turvalaitetyyppiFi, alityyppi, navigointilajikoodi),
-            sectorInfo = sektori,
-            extraInfo = extra,
-            latitude = latitude,
-            longitude = longitude,
-            turvalaitenumero = get("turvalaitenumero") ?: "",
-            kaytossa = kaytossa,
-            alityyppi = alityyppi,
-            rakennusvuodet = get("rakennusvuodet"),
-            omistaja = omistaja,
-            vaylanNimi = vayla,
-            mmsi = mmsi,
-            aiskaytossa = aiskaytossa
-        )
+        val (dLng, dLat) = approxMetersOffset(best.latitude, best.longitude, lat, lng)
+        val dist = kotlin.math.sqrt(dLat * dLat + dLng * dLng)
+        return if (dist <= radiusMeters) best else null
+    }
+
+    private fun approxMetersOffset(lat1: Double, lng1: Double, lat2: Double, lng2: Double): Pair<Double, Double> {
+        val meanLatRad = Math.toRadians((lat1 + lat2) / 2.0)
+        val dLatMeters = (lat2 - lat1) * 111_320.0
+        val dLngMeters = (lng2 - lng1) * 111_320.0 * kotlin.math.cos(meanLatRad)
+        return dLngMeters to dLatMeters
     }
 
     fun setRadarOpacity(opacity: Float) {

@@ -17,7 +17,8 @@ data class SeamarkDetail(
     val extraInfo: List<String> = emptyList(),
     val latitude: Double = 0.0,
     val longitude: Double = 0.0,
-    // VV-specific (kept for VvSeamarkDeduplicator / backward compat in WFS transforms)
+    // VV-specific detail fields, populated by IalaFeatureRenderer.handleClick for
+    // navigation_aid / light / daymark feature types and consumed by the popup UI.
     val turvalaitenumero: String = "",
     val kaytossa: Boolean = true,
     val alityyppi: String? = null,

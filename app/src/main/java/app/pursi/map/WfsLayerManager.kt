@@ -3,6 +3,7 @@ package app.pursi.map
 import app.pursi.data.model.WfsFeature
 import app.pursi.datasource.core.FeatureRendererRegistry
 import app.pursi.datasource.core.LayerType
+import app.pursi.datasource.core.VesiLiikennemerkkiIconMapper
 import app.pursi.datasource.fi.TurvalaiteIconMapper
 import org.maplibre.android.style.layers.Property
 import org.maplibre.android.maps.Style
@@ -10,6 +11,7 @@ import org.maplibre.android.style.expressions.Expression
 import org.maplibre.android.style.layers.FillLayer
 import org.maplibre.android.style.layers.LineLayer
 import org.maplibre.android.style.layers.PropertyFactory
+import org.maplibre.android.style.layers.PropertyValue
 import org.maplibre.android.style.layers.SymbolLayer
 import org.maplibre.android.style.sources.GeoJsonSource
 import org.maplibre.geojson.Feature
@@ -44,31 +46,44 @@ object WfsLayerManager {
                     feat.addStringProperty("label", extractLabel(feature, type))
                     feat.addStringProperty("type", type)
                     feat.addNumberProperty("_vv_id", feature.id?.toDouble() ?: 0.0)
-                    if (type == "turvalaite") {
+                    if (type == "navigation_aid") {
                         val turvalaiteType = TurvalaiteIconMapper.extractProperty(feature.properties, "turvalaitetyyppifi") ?: ""
                         val alityyppi = TurvalaiteIconMapper.extractProperty(feature.properties, "alityyppi") ?: ""
                         val navigointilajikoodi = TurvalaiteIconMapper.extractProperty(feature.properties, "navigointilajikoodi") ?: ""
                         feat.addStringProperty("seamark:type", TurvalaiteIconMapper.toSeamarkType(turvalaiteType, alityyppi, navigointilajikoodi))
                         feat.addStringProperty("nimifi", TurvalaiteIconMapper.extractProperty(feature.properties, "nimifi") ?: "")
                     }
+                    if (type == "notice") {
+                        val vlmla = getProperty(feature.properties, "vlmlajityyppi")?.toIntOrNull() ?: 0
+                        feat.addStringProperty("vesiliikennemerkki_icon", VesiLiikennemerkkiIconMapper.toIconName(vlmla))
+                    }
                 }
                 feat
             } catch (_: Exception) { null }
         }
         if (geoFeatures.isEmpty()) return
-        addPreparedFeatures(style, FeatureCollection.fromFeatures(geoFeatures), type, soundingOpacity, contourOpacity, navmarkSizeMultiplier, isNightMode)
+        // Namespace by source name so multiple providers (e.g. live WFS + offline
+        // GeoJSON) for the same feature type don't silently overwrite each other.
+        val sourceName = features.first().source.ifBlank { "default" }
+        addPreparedFeatures(
+            style, sourceName,
+            FeatureCollection.fromFeatures(geoFeatures), type,
+            soundingOpacity, contourOpacity, navmarkSizeMultiplier, isNightMode
+        )
     }
 
     fun addPreparedFeatures(
-        style: Style, collection: FeatureCollection, type: String,
+        style: Style, sourceName: String, collection: FeatureCollection, type: String,
         soundingOpacity: Float = 0.6f,
         contourOpacity: Float = 0.5f,
         navmarkSizeMultiplier: Float = 1.0f,
         isNightMode: Boolean = false
     ) {
-        val sourceId = "wfs-$type"
-        val layerId = "layer-wfs-$type"
-        val labelLayerId = "layer-wfs-${type}-label"
+        // Namespace the source/layer by source name so multiple providers (e.g. live WFS
+        // and offline GeoJSON) for the same feature type don't overwrite each other.
+        val sourceId = "wfs-$sourceName-$type"
+        val layerId = "layer-wfs-$sourceName-$type"
+        val labelLayerId = "layer-wfs-$sourceName-${type}-label"
 
         val existingSource = style.getSource(sourceId)
         if (existingSource is GeoJsonSource) {
@@ -105,7 +120,7 @@ object WfsLayerManager {
                 }
                 style.addLayerAbove(labelLayer, layerId)
             }
-            "navline" -> {
+            "navigation_line" -> {
                 style.addLayerBelow(LineLayer(layerId, sourceId).apply {
                     setProperties(PropertyFactory.lineWidth(2f), PropertyFactory.lineColor("#1565C0"), PropertyFactory.lineOpacity(0.7f))
                 }, "layer-openseamap")
@@ -115,7 +130,7 @@ object WfsLayerManager {
                     setProperties(PropertyFactory.lineWidth(3f), PropertyFactory.lineColor("#0D47A1"), PropertyFactory.lineOpacity(0.5f), PropertyFactory.lineDasharray(arrayOf(4f, 2f)))
                 }, "layer-openseamap")
             }
-            "restriction" -> {
+            "restricted_area" -> {
                 style.addLayerBelow(FillLayer(layerId, sourceId).apply {
                     setProperties(PropertyFactory.fillColor("#E53935"), PropertyFactory.fillOpacity(0.2f), PropertyFactory.fillOutlineColor("#C62828"))
                 }, "layer-openseamap")
@@ -175,7 +190,7 @@ object WfsLayerManager {
                 }
                 style.addLayerBelow(fillLayer, "layer-openseamap")
             }
-            "turvalaite" -> {
+            "navigation_aid" -> {
                 val layer = SymbolLayer(layerId, sourceId).apply {
                     setProperties(
                         PropertyFactory.iconImage("{turvalaite_icon}"),
@@ -191,7 +206,7 @@ object WfsLayerManager {
                     style.addLayer(layer)
                 }
             }
-            "turvalaitevika" -> {
+            "aton_fault" -> {
                 val layer = SymbolLayer(layerId, sourceId).apply {
                     setProperties(
                         PropertyFactory.iconImage("warning_triangle"),
@@ -204,19 +219,30 @@ object WfsLayerManager {
                 }
                 style.addLayerAbove(layer, "layer-openseamap")
             }
-            "vesiliikennemerkki" -> {
+            "notice" -> {
                 val layer = SymbolLayer(layerId, sourceId).apply {
                     setProperties(
                         PropertyFactory.iconImage("{vesiliikennemerkki_icon}"),
                         PropertyFactory.iconSize(0.6f * navmarkSizeMultiplier),
                         PropertyFactory.iconAllowOverlap(true),
-                        PropertyFactory.iconIgnorePlacement(true)
+                        PropertyFactory.iconIgnorePlacement(true),
+                        PropertyFactory.textField("{label}"),
+                        PropertyFactory.textAnchor("top"),
+                        PropertyFactory.textOffset(arrayOf(0f, -0.4f)),
+                        PropertyFactory.textSize(11f),
+                        PropertyFactory.textColor("#000000"),
+                        PropertyFactory.textHaloColor("#FFFFFF"),
+                        PropertyFactory.textHaloWidth(1.5f)
                     )
                     minZoom = 11.0f
                 }
-                style.addLayerAbove(layer, "layer-openseamap")
+                try {
+                    style.addLayerAbove(layer, "layer-openseamap")
+                } catch (_: Exception) {
+                    style.addLayer(layer)
+                }
             }
-            "valosektori" -> {
+            "light_sector" -> {
                 val fillLayer = FillLayer(layerId, sourceId).apply {
                     setProperties(
                         PropertyFactory.fillColor(Expression.get("sektori_color")),
@@ -243,10 +269,26 @@ object WfsLayerManager {
     }
 
     fun removeFeatures(style: Style, type: String) {
-        try { style.removeLayer("layer-wfs-$type") } catch (_: Exception) { }
-        try { style.removeLayer("layer-wfs-${type}-label") } catch (_: Exception) { }
-        try { style.removeLayer("layer-wfs-${type}-bg") } catch (_: Exception) { }
-        try { style.removeSource("wfs-$type") } catch (_: Exception) { }
+        // Layers/sources are now namespaced per provider/source; iterate the style to find
+        // every id that matches the namespaced pattern for this type. This keeps the
+        // remove contract ("drop all layers for this type") intact across providers.
+        val layerPrefix = "layer-wfs-"
+        val sourcePrefix = "wfs-"
+        val suffix = "-$type"
+        val labelSuffix = "-${type}-label"
+        val bgSuffix = "-${type}-bg"
+        for (layer in style.layers) {
+            val id = layer.id ?: continue
+            if (id.startsWith(layerPrefix) && (id.endsWith(suffix) || id.endsWith(labelSuffix) || id.endsWith(bgSuffix))) {
+                try { style.removeLayer(id) } catch (_: Exception) { }
+            }
+        }
+        for (source in style.sources) {
+            val id = source.id ?: continue
+            if (id.startsWith(sourcePrefix) && id.endsWith(suffix)) {
+                try { style.removeSource(id) } catch (_: Exception) { }
+            }
+        }
     }
 
     fun extractLabel(feature: WfsFeature, type: String): String {
@@ -266,16 +308,27 @@ object WfsLayerManager {
             "daymark" -> {
                 getProperty(props, "nimi", "name")?.take(20) ?: ""
             }
-            "turvalaite" -> {
+            "navigation_aid" -> {
                 getProperty(props, "nimifi", "name")?.take(30) ?: ""
             }
-            "turvalaitevika" -> {
+            "aton_fault" -> {
                 getProperty(props, "vayla", "tunnus")?.take(20) ?: "VIKA"
             }
-            "vesiliikennemerkki" -> {
+            "notice" -> {
                 val arvo = getProperty(props, "rajoitusarvo")
                 val teksti = getProperty(props, "lisakilventeksti1")
-                arvo?.let { "${it} km/h" } ?: teksti?.take(15) ?: ""
+                val vlmla = getProperty(props, "vlmlajityyppi")?.toIntOrNull()
+                val unit = when (vlmla) {
+                    6, 11 -> "km/h"
+                    15, 16, 24, 31, 32 -> "m"
+                    else -> null
+                }
+                when {
+                    arvo != null && unit != null -> "$arvo $unit"
+                    arvo != null -> arvo
+                    teksti != null -> teksti.take(40)
+                    else -> ""
+                }
             }
             else -> ""
         }
@@ -312,41 +365,52 @@ object WfsLayerManager {
         val geoFeatures = features.mapNotNull { renderer.toMapLibreFeature(it) }
         if (geoFeatures.isEmpty()) return
 
-        try { style.removeLayer(layerId) } catch (_: Exception) { }
-        try { style.removeSource(sourceId) } catch (_: Exception) { }
+        val collection = FeatureCollection.fromFeatures(geoFeatures)
+
+        // If the source already exists, just update its GeoJSON in place.
+        // This avoids tearing down and re-creating the layer on every camera
+        // move, which causes a visible flicker and a frame where the icons
+        // are completely absent ("disappear when zoomed in").
+        val existingSource = style.getSource(sourceId)
+        if (existingSource is GeoJsonSource) {
+            existingSource.setGeoJson(collection)
+            return
+        }
 
         val source = GeoJsonSource(sourceId)
-        source.setGeoJson(FeatureCollection.fromFeatures(geoFeatures))
+        source.setGeoJson(collection)
         style.addSource(source)
 
         when (definition.type) {
             LayerType.SYMBOL -> {
                 val layer = SymbolLayer(layerId, sourceId).apply {
+                    val props = mutableListOf<PropertyValue<*>>()
                     val icon = definition.styleProperties["iconImage"] as? String
                     if (icon != null && icon.startsWith("{")) {
-                        setProperties(
-                            PropertyFactory.iconImage(Expression.get(icon.removeSurrounding("{"))),
-                            PropertyFactory.iconSize(definition.styleProperties["iconSize"] as? Float ?: 1.0f),
-                            PropertyFactory.iconAllowOverlap(definition.styleProperties["iconAllowOverlap"] as? Boolean ?: false)
-                        )
+                        props.add(PropertyFactory.iconImage(Expression.get(icon.removeSurrounding("{"))))
                     } else if (icon != null) {
-                        setProperties(
-                            PropertyFactory.iconImage(icon),
-                            PropertyFactory.iconSize(definition.styleProperties["iconSize"] as? Float ?: 1.0f),
-                            PropertyFactory.iconAllowOverlap(definition.styleProperties["iconAllowOverlap"] as? Boolean ?: false)
-                        )
+                        props.add(PropertyFactory.iconImage(icon))
                     }
+                    props.add(PropertyFactory.iconSize(definition.styleProperties["iconSize"] as? Float ?: 1.0f))
+                    props.add(PropertyFactory.iconAllowOverlap(definition.styleProperties["iconAllowOverlap"] as? Boolean ?: false))
+                    props.add(PropertyFactory.iconOpacity(definition.styleProperties["iconOpacity"] as? Float ?: 1.0f))
                     val textField = definition.styleProperties["textField"] as? String
                     if (textField != null) {
-                        setProperties(
-                            PropertyFactory.textField(Expression.get(textField.removeSurrounding("{"))),
-                            PropertyFactory.textSize(definition.styleProperties["textSize"] as? Float ?: 11f),
-                            PropertyFactory.textColor(definition.styleProperties["textColor"] as? String ?: "#000000")
-                        )
+                        props.add(PropertyFactory.textField(Expression.get(textField.removeSurrounding("{"))))
+                        props.add(PropertyFactory.textSize(definition.styleProperties["textSize"] as? Float ?: 11f))
+                        props.add(PropertyFactory.textColor(definition.styleProperties["textColor"] as? String ?: "#000000"))
+                        props.add(PropertyFactory.textHaloColor(definition.styleProperties["textHaloColor"] as? String ?: "#FFFFFF"))
+                        props.add(PropertyFactory.textHaloWidth(definition.styleProperties["textHaloWidth"] as? Float ?: 1.5f))
                     }
+                    setProperties(*props.toTypedArray())
+                    definition.minZoom?.let { minZoom = it }
                 }
+                // Add at the top of the layer stack. The old approach referenced
+                // layer-openseamap, but at low raster opacity this caused the
+                // layer above it to also appear semi-transparent or disappear
+                // entirely (likely a MapLibre rendering-engine issue).
                 try {
-                    style.addLayerAbove(layer, "layer-openseamap")
+                    style.addLayerAt(layer, style.layers.size)
                 } catch (_: Exception) {
                     style.addLayer(layer)
                 }

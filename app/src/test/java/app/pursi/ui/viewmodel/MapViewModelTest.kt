@@ -8,6 +8,7 @@ import app.pursi.data.dao.BoatDao
 import app.pursi.data.dao.SavedRouteDao
 import app.pursi.data.dao.TrackDao
 import app.pursi.data.dao.TrackSummaryDao
+import app.pursi.datasource.core.FeatureRendererRegistry
 import app.pursi.datasource.core.SourceResolver
 import app.pursi.location.LocationStateHolder
 import app.pursi.location.TrackRecorder
@@ -43,6 +44,7 @@ class MapViewModelTest {
     private val context = mockk<Context>(relaxed = true)
     private val aisRepository = mockk<AisRepository>(relaxed = true)
     private val waterObservationRepository = mockk<WaterObservationRepository>(relaxed = true)
+    private val featureRendererRegistry = mockk<FeatureRendererRegistry>(relaxed = true)
 
     private lateinit var viewModel: MapViewModel
 
@@ -66,7 +68,8 @@ class MapViewModelTest {
             weatherRepository = weatherRepository,
             locationStateHolder = locationStateHolder,
             aisRepository = aisRepository,
-            waterObservationRepository = waterObservationRepository
+            waterObservationRepository = waterObservationRepository,
+            featureRendererRegistry = featureRendererRegistry
         )
     }
 
@@ -243,7 +246,8 @@ class MapViewModelTest {
             weatherRepository = weatherRepository,
             locationStateHolder = locationStateHolder,
             aisRepository = aisRepository,
-            waterObservationRepository = waterObservationRepository
+            waterObservationRepository = waterObservationRepository,
+            featureRendererRegistry = featureRendererRegistry
         )
 
         viewModel.toggleShowLightning()

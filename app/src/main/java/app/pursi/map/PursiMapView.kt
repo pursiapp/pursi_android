@@ -63,13 +63,9 @@ import app.pursi.ui.viewmodel.BoatIconSize
 import app.pursi.ui.viewmodel.FollowMode
 import app.pursi.ui.viewmodel.NavmarkSize
 import app.pursi.ui.viewmodel.OrientationMode
-import app.pursi.ui.viewmodel.SeamarkDetail
-import app.pursi.ui.viewmodel.SeamarkSource
 import app.pursi.weather.LightningStrike
 import app.pursi.weather.MarineWarning
 import app.pursi.data.model.WfsFeature
-import app.pursi.datasource.fi.TurvalaiteIconMapper
-import app.pursi.datasource.fi.VvSeamarkDeduplicator
 import app.pursi.water.WaterObservation
 import app.pursi.water.WaterObservationType
 import kotlinx.coroutines.Dispatchers
@@ -151,8 +147,7 @@ fun PursiMapView(
     fairwayFeatures: Map<String, List<WfsFeature>> = emptyMap(),
     vvUsingNetwork: Boolean = false,
     vvFetchCounter: Int = 0,
-    onTurvalaiteClick: (Long) -> Unit = {},
-    onOsmSeamarkClick: (SeamarkDetail) -> Unit = {},
+    onSeamarkClick: (Double, Double) -> Unit = { _, _ -> },
     onAlgaeObservationClick: (Int) -> Unit = {},
     onRadarEffectiveDelay: (Int) -> Unit = {},
     showSectors: Boolean = true,
@@ -181,8 +176,7 @@ fun PursiMapView(
     val currentOnRadarEffectiveDelay by rememberUpdatedState(onRadarEffectiveDelay)
     val currentOnClearPoiMarker by rememberUpdatedState(onClearPoiMarker)
     val currentOnVesselClick by rememberUpdatedState(onVesselClick)
-    val currentOnTurvalaiteClick by rememberUpdatedState(onTurvalaiteClick)
-    val currentOnOsmSeamarkClick by rememberUpdatedState(onOsmSeamarkClick)
+    val currentOnSeamarkClick by rememberUpdatedState(onSeamarkClick)
     val currentOnAlgaeObservationClick by rememberUpdatedState(onAlgaeObservationClick)
     val currentRadarProvider by rememberUpdatedState(radarProvider)
     val obsRadarOpacity by rememberUpdatedState(radarOpacity)
@@ -192,6 +186,7 @@ fun PursiMapView(
     val obsLastKnownBearing by rememberUpdatedState(lastKnownBearing)
     val obsLookAheadFactor by rememberUpdatedState(lookAheadFactor)
     val currentViewportBounds by rememberUpdatedState(viewportBounds)
+    val currentChartOpacity by rememberUpdatedState(chartOpacity)
     val obsBoatIconSize by rememberUpdatedState(boatIconSize)
     val obsBoatIconColor by rememberUpdatedState(boatIconColor)
 
@@ -255,10 +250,9 @@ fun PursiMapView(
             }
         }
 
-        var vesselClickListener: MapLibreMap.OnMapClickListener? = null
-        var turvalaiteClickListener: MapLibreMap.OnMapClickListener? = null
-        var osmSeamarkClickListener: MapLibreMap.OnMapClickListener? = null
-        var algaeObsClickListener: MapLibreMap.OnMapClickListener? = null
+            var vesselClickListener: MapLibreMap.OnMapClickListener? = null
+            var seamarkClickListener: MapLibreMap.OnMapClickListener? = null
+            var algaeObsClickListener: MapLibreMap.OnMapClickListener? = null
 
         mapView.getMapAsync { map ->
             configureMap(map, context, chartOpacity)
@@ -354,59 +348,16 @@ fun PursiMapView(
                 false
             }
             map.addOnMapClickListener(vesselClickListener)
-            turvalaiteClickListener = MapLibreMap.OnMapClickListener { latlng ->
-                val sp = map.projection.toScreenLocation(latlng)
-                val rect = android.graphics.RectF(sp.x - 20f, sp.y - 20f, sp.x + 20f, sp.y + 20f)
-                val turvalaiteLayers = arrayOf("layer-wfs-turvalaite")
-                val f = map.queryRenderedFeatures(rect, *turvalaiteLayers)
-                if (f.isNotEmpty()) {
-                    val id = f.first().getNumberProperty("_vv_id")?.toLong() ?: 0L
-                    if (id != 0L) {
-                        currentOnTurvalaiteClick(id)
-                        return@OnMapClickListener true
-                    }
-                }
-                false
+            seamarkClickListener = MapLibreMap.OnMapClickListener { latlng ->
+                // Forward the click coordinate to the screen. The screen does the
+                // provider-aware lookup (MapViewModel.findSeamarkAt) and the OSM
+                // fallback, then either shows a seamark popup or runs the bare-map
+                // click logic (mock location, measure mode, clear popup). Consume
+                // the click so no other listener re-handles it.
+                currentOnSeamarkClick(latlng.latitude, latlng.longitude)
+                true
             }
-            map.addOnMapClickListener(turvalaiteClickListener)
-            osmSeamarkClickListener = MapLibreMap.OnMapClickListener { latlng ->
-                val sp = map.projection.toScreenLocation(latlng)
-                val rect = android.graphics.RectF(sp.x - 20f, sp.y - 20f, sp.x + 20f, sp.y + 20f)
-                val allHit = map.queryRenderedFeatures(rect)
-                val osmHit = allHit.firstOrNull { feat ->
-                    feat.getNumberProperty("_vv_id") == null &&
-                    (feat.getStringProperty("seamark:type") != null ||
-                    feat.getStringProperty("seamark:name") != null)
-                }
-                if (osmHit != null) {
-                    val osmType = osmHit.getStringProperty("seamark:type") ?: ""
-                    val name = osmHit.getStringProperty("seamark:name")
-                        ?: osmHit.getStringProperty("ref")
-                        ?: osmHit.getStringProperty("name")
-                        ?: ""
-                    val hasLight = osmHit.getStringProperty("seamark:light:character") != null
-                        || osmHit.getStringProperty("seamark:light:colour") != null
-                    val lightParts = mutableListOf<String>()
-                    osmHit.getStringProperty("seamark:light:character")?.let { lightParts.add(it) }
-                    osmHit.getStringProperty("seamark:light:colour")?.let { lightParts.add(it) }
-                    osmHit.getStringProperty("seamark:light:period")?.let { lightParts.add("${it}s") }
-                    val detail = SeamarkDetail(
-                        source = SeamarkSource.OSM,
-                        name = name,
-                        typeLabel = TurvalaiteIconMapper.humanReadableName(osmType),
-                        hasLight = hasLight,
-                        lightCharacteristic = lightParts.joinToString(" ").takeIf { it.isNotBlank() },
-                        description = osmType.replace("_", " "),
-                        extraInfo = listOf("OpenSeaMap"),
-                        latitude = latlng.latitude,
-                        longitude = latlng.longitude
-                    )
-                    currentOnOsmSeamarkClick(detail)
-                    return@OnMapClickListener true
-                }
-                false
-            }
-            map.addOnMapClickListener(osmSeamarkClickListener)
+            map.addOnMapClickListener(seamarkClickListener)
             algaeObsClickListener = MapLibreMap.OnMapClickListener { latlng ->
                 val sp = map.projection.toScreenLocation(latlng)
                 val rect = android.graphics.RectF(sp.x - 24f, sp.y - 24f, sp.x + 24f, sp.y + 24f)
@@ -442,8 +393,7 @@ fun PursiMapView(
                 m.removeOnMapLongClickListener(longClickListener)
                 m.removeOnMapClickListener(clickListener)
                 vesselClickListener?.let { m.removeOnMapClickListener(it) }
-                turvalaiteClickListener?.let { m.removeOnMapClickListener(it) }
-                osmSeamarkClickListener?.let { m.removeOnMapClickListener(it) }
+                seamarkClickListener?.let { m.removeOnMapClickListener(it) }
                 algaeObsClickListener?.let { m.removeOnMapClickListener(it) }
                 m.removeOnCameraMoveStartedListener(cameraMoveListener)
                 m.removeOnCameraMoveListener(cameraMovingListener)
@@ -798,17 +748,6 @@ fun PursiMapView(
         map.getStyle { style -> WeatherOverlay.updateAlgaeSatellite(style, showAlgae) }
     }
 
-    var lastSeamarkHidden by remember { mutableStateOf(false) }
-    LaunchedEffect(mapReadyToken, chartOpacity) {
-        val map = currentMap.value as? MapLibreMap ?: return@LaunchedEffect
-        val shouldHide = chartOpacity > 0.85f
-        if (shouldHide == lastSeamarkHidden || seamarkLayerIds.isEmpty()) return@LaunchedEffect
-        lastSeamarkHidden = shouldHide
-        map.getStyle { style ->
-            ChartOverlay.updateSeamarkVisibility(style, seamarkLayerIds, chartOpacity)
-        }
-    }
-
     var depthGen by remember { mutableStateOf(0) }
 
     LaunchedEffect(mapReadyToken, showDepth, depthFeatures) {
@@ -825,12 +764,13 @@ fun PursiMapView(
     }
 
     var turvalaiteGen by remember { mutableStateOf(0) }
+    var hideForTurvalaite by remember { mutableStateOf(false) }
 
-    LaunchedEffect(mapReadyToken, showVvNavmarks, turvalaiteFeatures, turvalaitevikaFeatures, vvFetchCounter, navmarkSize) {
+    LaunchedEffect(mapReadyToken, showVvNavmarks, turvalaiteFeatures, turvalaitevikaFeatures, vvFetchCounter, navmarkSize, chartOpacity) {
         val map = currentMap.value as? MapLibreMap ?: return@LaunchedEffect
         if (!showVvNavmarks) {
             map.getStyle { style ->
-                WfsOverlay.applyTurvalaite(style, null, false, navmarkSize.multiplier, isNightMode)
+                WfsOverlay.applyTurvalaite(style, null, false, navmarkSize.multiplier, isNightMode, chartOpacity)
             }
             return@LaunchedEffect
         }
@@ -841,9 +781,15 @@ fun PursiMapView(
         }
         val viewport = currentViewportBounds
         val hasFeaturesInView = prepared != null && WfsOverlay.hasTurvalaiteInView(prepared, viewport)
+        hideForTurvalaite = hasFeaturesInView
         map.getStyle { style ->
             if (turvalaiteGen != myGen) return@getStyle
-            WfsOverlay.applyTurvalaite(style, prepared, hasFeaturesInView, navmarkSize.multiplier, isNightMode)
+            WfsOverlay.applyTurvalaite(style, prepared, hasFeaturesInView, navmarkSize.multiplier, isNightMode, chartOpacity)
+            // Re-apply WFS layer visibility AFTER the turvalaite layer has been
+            // (re)added. applyTurvalaite re-adds the layer on every call, so the
+            // visibility set by the earlier LaunchedEffect is lost; running
+            // updateSeamarkVisibility here ensures the slider setting takes effect.
+            ChartOverlay.updateSeamarkVisibility(style, seamarkLayerIds, chartOpacity)
         }
     }
 
@@ -862,6 +808,16 @@ fun PursiMapView(
         map.getStyle { style ->
             if (vvOverlayGen != myGen) return@getStyle
             WfsOverlay.updateVvFeatures(style, showVvNavmarks, showSectors, navlineFeatures, fairwayFeatures, valosektoriFeatures, vesiliikennemerkkiFeatures, isNightMode)
+            // Re-apply WFS and seamark layer visibility after the VV layers
+            // have been added/updated. The visibility calls are cumulative and
+            // independent of the rendering pipeline used by updateVvFeatures.
+            ChartOverlay.updateSeamarkVisibility(style, seamarkLayerIds, chartOpacity)
+            val hideForNotice = vesiliikennemerkkiFeatures.values.any { it.isNotEmpty() }
+            ChartOverlay.setDynamicIconVisibility(
+                style = style,
+                hideForTurvalaite = hideForTurvalaite,
+                hideForNotice = hideForNotice
+            )
         }
     }
 
@@ -916,7 +872,9 @@ private fun Style.registerNavmarkIcons(context: android.content.Context, isNight
         "josm_Q126_generic_no_waterskiing", "josm_Q126_generic_no_sailboards",
         "josm_Q126_CEVNI_no_entry", "josm_Q126_CEVNI_no_waterbikes",
         "josm_Q126_CEVNI_stop", "josm_Q126_generic_make_radio_contact",
+        "josm_Q126_CEVNI_no_wash",
         "josm_Q126_BNIWR_limited_headroom", "josm_Q126_generic_limited_depth",
+        "josm_Q126_generic_bridge",
         "josm_Q126_CEVNI_radio_information", "josm_Q126_CEVNI_berthing_permitted",
         "josm_Q126_CEVNI_overhead_cable", "josm_Q126_generic_telephone",
         "josm_Q126_generic_ferry_independent", "josm_Q126_generic_drinking_water",
@@ -924,17 +882,24 @@ private fun Style.registerNavmarkIcons(context: android.content.Context, isNight
     )
     var loaded = 0
     for (name in names) {
-        try {
-            val bmp = android.graphics.BitmapFactory.decodeStream(
-                context.assets.open("$dir/$name.png")
-            )
-            if (bmp != null && getImage(name) == null) {
-                addImage(name, bmp)
-                loaded++
-            }
-        } catch (_: Exception) {}
+        // Try the requested dir first; in night mode, fall back to the day sprite
+        // when no night-specific icon exists. The navmarks-night/ directory is
+        // partial today; this keeps the icons visible until the night sprite is
+        // fully generated.
+        val bmp = loadIcon(context, "$dir/$name.png")
+            ?: if (isNightMode) loadIcon(context, "navmarks/$name.png") else null
+        if (bmp != null && getImage(name) == null) {
+            addImage(name, bmp)
+            loaded++
+        }
     }
     android.util.Log.d("SeamarkServer", "Loaded $loaded navmark icons from $dir")
+}
+
+private fun loadIcon(context: android.content.Context, path: String): android.graphics.Bitmap? = try {
+    android.graphics.BitmapFactory.decodeStream(context.assets.open(path))
+} catch (_: Exception) {
+    null
 }
 
 private fun Style.loadOfmSprite(context: android.content.Context) {

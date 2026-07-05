@@ -84,8 +84,18 @@ class IalaFeatureRenderer @Inject constructor(
         "notice" -> LayerDefinition(
             layerId = "layer-wfs-notice", sourceId = "source-wfs-notice",
             type = LayerType.SYMBOL,
-            styleProperties = mapOf("iconImage" to "{icon}", "iconSize" to 0.6f,
-                "iconAllowOverlap" to true)
+            styleProperties = mapOf(
+                "iconImage" to "{icon}",
+                "iconSize" to 1.0f,
+                "iconOpacity" to 1.0f,
+                "iconAllowOverlap" to true,
+                "textField" to "{label}",
+                "textSize" to 12f,
+                "textColor" to "#000000",
+                "textHaloColor" to "#FFFFFF",
+                "textHaloWidth" to 1.5f
+            ),
+            minZoom = 11f
         )
         "navigation_line" -> LayerDefinition(
             layerId = "layer-wfs-navline", sourceId = "source-wfs-navline",
@@ -132,31 +142,209 @@ class IalaFeatureRenderer @Inject constructor(
         val props = rawProps.mapKeys { (k, _) -> mapper.mapKey(k) ?: k }
             .mapValues { (k, v) -> mapper.mapValue(k, v) ?: v }
 
+        if (feature.featureType !in IALA_FEATURE_TYPES) return null
+
+        // For navigation aids / lights / daymarks we build a rich detail (matching the
+        // pre-refactor MapViewModel.buildTurvalaiteDetail output for Finnish data).
+        if (feature.featureType == "navigation_aid" || feature.featureType == "light" || feature.featureType == "daymark") {
+            return buildAtonDetail(feature, props, rawProps)
+        }
+
+        // Vesiliikennemerkit (waterway signs) get a popup with sign type, text, and
+        // restriction value.
+        if (feature.featureType == "notice") {
+            return buildNoticeDetail(feature, props, rawProps)
+        }
+
+        // Light sectors, fairways, navigation lines, restricted areas etc. don't get a
+        // popup — they're rendered as geometry only. Returning a minimal VV detail is
+        // safe in case a country wants to extend later.
         val name = props["name"] ?: props["name_sv"] ?: ""
+        return SeamarkDetail(
+            source = SeamarkSource.VV,
+            id = feature.id,
+            name = name,
+            latitude = feature.latitude,
+            longitude = feature.longitude
+        )
+    }
+
+    private fun buildAtonDetail(
+        feature: WfsFeature,
+        props: Map<String, String>,
+        rawProps: Map<String, String>
+    ): SeamarkDetail {
+        val name = props["name"] ?: props["name_sv"] ?: ""
+        val nameSv = props["name_sv"]
         val atonType = props["aton_type"] ?: ""
         val status = props["status"]
         val structure = props["structure_type"]
+        val lit = props["lit"] == "yes"
+        val lightChar = props["light_character"]?.take(200)
+        val sector = props["sector_info"]?.take(200)
+        val symbol = props["symbol"]
+        val navCode = props["nav_category"]?.toIntOrNull()
+        val aiskaytossa = props["ais"] == "yes"
+        val mmsi = rawProps["mmsi"]?.toLongOrNull()
+
+        val extra = mutableListOf<String>()
+        props["owner"]?.let { extra.add("Omistaja: $it") }
+        props["fairway_name"]?.let { extra.add("Väylä: $it") }
+        props["construction_year"]?.let { extra.add("Rakennettu: $it") }
+        if (aiskaytossa && mmsi != null) extra.add("AIS MMSI: $mmsi")
+
+        val description = descriptionFor(atonType, structure, navCode, symbol)
 
         return SeamarkDetail(
             source = SeamarkSource.VV,
             id = feature.id,
             name = name,
-            typeLabel = atonType.replaceFirstChar { it.uppercase() },
-            statusLabel = status,
-            structureLabel = structure,
-            hasLight = props["lit"] == "yes",
-            lightCharacteristic = props["light_character"],
-            sectorInfo = props["sector_info"],
-            extraInfo = listOfNotNull(
-                props["fairway_name"]?.let { "Väylä: $it" },
-                props["aton_number"]?.let { "Numero: $it" },
-                props["owner"]?.let { "Omistaja: $it" },
-                props["construction_year"]?.let { "Rakennettu: $it" },
-                if (props["ais"] == "yes") "AIS" else null
-            ),
+            subtitle = nameSv,
+            typeLabel = humanAtonTypeLabel(atonType),
+            statusLabel = statusLabelFor(status),
+            structureLabel = structureLabelFor(structure),
+            hasLight = lit,
+            lightCharacteristic = lightChar,
+            description = description,
+            sectorInfo = sector,
+            extraInfo = extra,
+            latitude = feature.latitude,
+            longitude = feature.longitude,
+            turvalaitenumero = props["aton_number"] ?: "",
+            kaytossa = status != "removed",
+            alityyppi = rawProps["alityyppi"],
+            rakennusvuodet = props["construction_year"],
+            omistaja = props["owner"],
+            vaylanNimi = props["fairway_name"],
+            mmsi = mmsi,
+            aiskaytossa = aiskaytossa
+        )
+    }
+
+    private fun buildNoticeDetail(
+        feature: WfsFeature,
+        props: Map<String, String>,
+        rawProps: Map<String, String>
+    ): SeamarkDetail {
+        val signType = props["sign_type"]?.toIntOrNull() ?: 0
+        val signLabel = humanNoticeType(signType)
+        val restriction = props["restriction_value"]?.takeIf { it.isNotBlank() }
+        val signText = props["sign_text"]?.takeIf { it.isNotBlank() }
+
+        val description = when {
+            restriction != null && signText != null -> "$signLabel — $signText ($restriction)"
+            restriction != null -> "$signLabel ($restriction)"
+            signText != null -> "$signLabel — $signText"
+            else -> signLabel
+        }
+
+        val extra = mutableListOf<String>()
+        restriction?.let { extra.add("Rajoitusarvo: $it") }
+        signText?.let { extra.add("Lisäkilpi: $it") }
+        rawProps["vlmlajityyppi"]?.let { extra.add("Koodi: $it") }
+
+        return SeamarkDetail(
+            source = SeamarkSource.VV,
+            id = feature.id,
+            name = signLabel,
+            typeLabel = "Vesiliikennemerkki",
+            description = description,
+            hasLight = false,
+            extraInfo = extra,
             latitude = feature.latitude,
             longitude = feature.longitude
         )
+    }
+
+    private fun humanNoticeType(signType: Int): String = when (signType) {
+        1 -> "Ankkurointikielto"
+        2, 3 -> "Kiinnittymis-/ankkurointikielto"
+        4 -> "Ohittamis-/kohtaamiskielto"
+        5 -> "Ohittamiskielto"
+        6, 11 -> "Nopeusrajoitus"
+        7 -> "Vesihiihdokielto"
+        8 -> "Purjelautailukielto"
+        9 -> "Ajosuuntakielto"
+        10 -> "Vesipyöräilykielto"
+         12 -> "Pysähtyminen"
+        13 -> "Aallokon aiheuttamisen kielto"
+        14 -> "Radioliikenne"
+        15 -> "Aukkovaatimus"
+        16 -> "Syväysrajoitus"
+        17 -> "Silta"
+        21, 28 -> "Radiotiedotus"
+        22, 23 -> "Laituriin kiinnittyminen sallittu"
+        24, 31, 32 -> "Avoin johto"
+        25 -> "Puhelin"
+        26, 27 -> "Lauttayhteys"
+        29 -> "Juomavesi"
+        30 -> "Kiellon päättyminen"
+        33, 34 -> "Ajojärjestely"
+        else -> "Vesiliikennemerkki"
+    }
+
+    private fun humanAtonTypeLabel(atonType: String): String = when (atonType) {
+        "beacon", "buoy", "lateral_mark" -> "Poiju/viitta"
+        "major_light" -> "Majakka"
+        "sector_light" -> "Sektoriloisto"
+        "directional_light" -> "Suuntaloisto"
+        "light" -> "Loisto"
+        "leading_light" -> "Linjaloisto"
+        "side_light" -> "Sivuloisto"
+        "auxiliary_light" -> "Apuloisto"
+        "leading_mark" -> "Linjamerkki"
+        "daymark" -> "Päivätunnus"
+        "fog_signal" -> "Sumumerkki"
+        "virtual_aton" -> "AIS-turvalaite"
+        "radar_beacon" -> "Tutkamajakka"
+        "radar_reflector" -> "Tutkamerkki"
+        "topmark" -> "Huippumerkki"
+        "mooring" -> "Kiinnitysmerkki"
+        "special_mark" -> "Erikoismerkki"
+        else -> atonType.replaceFirstChar { it.uppercase() }
+    }
+
+    private fun statusLabelFor(status: String?): String? = when (status) {
+        "active" -> "Käytössä"
+        "removed" -> "Poistettu"
+        else -> status
+    }
+
+    private fun structureLabelFor(structure: String?): String? = when (structure) {
+        "floating" -> "Kelluva"
+        "fixed" -> "Kiinteä"
+        else -> structure
+    }
+
+    private fun descriptionFor(
+        atonType: String,
+        structure: String?,
+        navCode: Int?,
+        symbol: String?
+    ): String? {
+        val rakenne = when (structure) {
+            "floating" -> "kelluva"
+            "fixed" -> "kiinteä"
+            else -> null
+        }
+        if (atonType in setOf("beacon", "buoy", "lateral_mark") && navCode != null) {
+            val tyyppi = when (navCode) {
+                1 -> "Lateraalinen (punainen, vasen)"
+                2 -> "Lateraalinen (vihreä, oikea)"
+                3 -> "Pohjoiskardinaali"
+                4 -> "Eteläkardinaali"
+                5 -> "Länsikardinaali"
+                6 -> "Itäkardinaali"
+                7 -> "Yksittäisen vaaran merkki"
+                8 -> "Vapaavesimerkki"
+                9 -> "Erikoismerkki"
+                else -> null
+            }
+            if (tyyppi != null && rakenne != null) return "$tyyppi, $rakenne"
+            if (tyyppi != null) return tyyppi
+        }
+        val human = humanAtonTypeLabel(atonType)
+        return if (rakenne != null) "$human, $rakenne" else human
     }
 
     private fun renderAtoN(feature: WfsFeature, props: Map<String, String>): Feature? {
@@ -213,11 +401,15 @@ class IalaFeatureRenderer @Inject constructor(
 
     private fun renderNotice(feature: WfsFeature, props: Map<String, String>): Feature? {
         val signType = props["sign_type"]?.toIntOrNull() ?: 0
-        val icon = waterwaySignIcon(signType)
+        val icon = VesiLiikennemerkkiIconMapper.toIconName(signType)
         val feat = Feature.fromGeometry(Point.fromLngLat(feature.longitude, feature.latitude))
         feat.addStringProperty("icon", icon)
         feat.addStringProperty("providerId", feature.source)
         feat.addStringProperty("featureType", feature.featureType)
+        // Build a label from the restriction value (e.g. "30 km/h" for speed
+        // limit, "3.5 m" for height limit).
+        val restriction = props["restriction_value"]?.takeIf { it.isNotBlank() }
+        feat.addStringProperty("label", restriction ?: "")
         return feat
     }
 
@@ -255,30 +447,5 @@ class IalaFeatureRenderer @Inject constructor(
         }
         return result
     }
-
-    private fun waterwaySignIcon(typeCode: Int): String = when (typeCode) {
-        0, 13, 17, 18, 19, 20, 35, 36, 37 -> "josm_Q126_generic_crossing"
-        1 -> "josm_Q126_BNIWR_no_anchoring"
-        2, 3 -> "josm_Q126_generic_no_berthing"
-        4 -> "josm_Q126_CEVNI_no_convoy_overtaking"
-        5 -> "josm_Q126_CEVNI_no_convoy_passing"
-        6, 11 -> "josm_Q126_generic_speed_limit"
-        7 -> "josm_Q126_generic_no_waterskiing"
-        8 -> "josm_Q126_generic_no_sailboards"
-        9 -> "josm_Q126_CEVNI_no_entry"
-        10 -> "josm_Q126_CEVNI_no_waterbikes"
-        12 -> "josm_Q126_CEVNI_stop"
-        14 -> "josm_Q126_generic_make_radio_contact"
-        15 -> "josm_Q126_BNIWR_limited_headroom"
-        16 -> "josm_Q126_generic_limited_depth"
-        21, 28 -> "josm_Q126_CEVNI_radio_information"
-        22, 23 -> "josm_Q126_CEVNI_berthing_permitted"
-        24, 31, 32 -> "josm_Q126_CEVNI_overhead_cable"
-        25 -> "josm_Q126_generic_telephone"
-        26, 27 -> "josm_Q126_generic_ferry_independent"
-        29 -> "josm_Q126_generic_drinking_water"
-        30 -> "josm_Q126_CEVNI_prohibition_ends"
-        33, 34 -> "josm_Q126_generic_alignment"
-        else -> "josm_Q126_generic_crossing"
-    }
 }
+

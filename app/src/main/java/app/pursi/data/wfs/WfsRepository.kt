@@ -32,7 +32,7 @@ val WFS_SOURCES = listOf(
         displayName = "Navigation Lines",
         baseUrl = "https://avoinapi.vaylapilvi.fi/vaylatiedot/ows",
         typeName = "vesivaylatiedot:navigointilinjat_uusi",
-        featureType = "navline"
+        featureType = "navigation_line"
     ),
     WfsSource(
         name = "vayla_daymarks",
@@ -46,7 +46,7 @@ val WFS_SOURCES = listOf(
         displayName = "Restriction Areas",
         baseUrl = "https://avoinapi.vaylapilvi.fi/vaylatiedot/ows",
         typeName = "vesivaylatiedot:rajoitusalue_a_uusi",
-        featureType = "restriction"
+        featureType = "restricted_area"
     ),
     WfsSource(
         name = "vayla_fairways_1",

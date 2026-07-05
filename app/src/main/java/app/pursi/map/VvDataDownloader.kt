@@ -34,16 +34,16 @@ class VvDataDownloader(
             "https://github.com/pursiapp/vaylavirasto-data/releases/latest/download"
 
         val DATA_TYPES = listOf(
-            VvDataType("turvalaitteet", "turvalaitteet.geojson.gz", "turvalaite", 2753),
-            VvDataType("turvalaitteet_muut", "turvalaitteet_muut.geojson.gz", "turvalaite", 664),
+            VvDataType("turvalaitteet", "turvalaitteet.geojson.gz", "navigation_aid", 2753),
+            VvDataType("turvalaitteet_muut", "turvalaitteet_muut.geojson.gz", "navigation_aid", 664),
             VvDataType("loistot", "loistot.geojson.gz", "light", 224),
-            VvDataType("navigointilinjat", "navigointilinjat.geojson.gz", "navline", 1318),
+            VvDataType("navigointilinjat", "navigointilinjat.geojson.gz", "navigation_line", 1318),
             VvDataType("paivatunnukset", "paivatunnukset.geojson.gz", "daymark", 602),
-            VvDataType("rajoitusalueet", "rajoitusalueet.geojson.gz", "restriction", 5505),
+            VvDataType("rajoitusalueet", "rajoitusalueet.geojson.gz", "restricted_area", 5505),
             VvDataType("vaylat_vl1", "vaylat_vl1.geojson.gz", "fairway", 47),
             VvDataType("vaylat_vl2", "vaylat_vl2.geojson.gz", "fairway", 81),
-            VvDataType("valosektorit", "valosektorit.geojson.gz", "valosektori", 200),
-            VvDataType("vesiliikennemerkit", "vesiliikennemerkit.geojson.gz", "vesiliikennemerkki", 305)
+            VvDataType("valosektorit", "valosektorit.geojson.gz", "light_sector", 200),
+            VvDataType("vesiliikennemerkit", "vesiliikennemerkit.geojson.gz", "notice", 305)
         )
 
         fun typeUrl(fileName: String): String =

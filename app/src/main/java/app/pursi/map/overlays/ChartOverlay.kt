@@ -14,8 +14,6 @@ object ChartOverlay {
     private const val OPENSEAMAP_SUBDIR = "openseamap"
     private const val OPENSEAMAP_MINZOOM = 4f
 
-    private val WFS_TYPES = listOf("turvalaite", "turvalaitevika", "vesiliikennemerkki", "valosektori", "navline", "fairway")
-
     fun updateLayers(
         style: Style,
         chartProviders: List<ChartProvider>,
@@ -128,6 +126,17 @@ object ChartOverlay {
                 }
             }
         }
+
+        // When a local chart provider is active (e.g. Traficom in Finland,
+        // Kartverket in Norway), hide the global OpenSeaMap seamark raster.
+        // It was added as a fallback earlier, but now that we know a local
+        // chart covers this area we should not show both — they visually
+        // double-up at mid-opacity slider positions.
+        if (chartProviders.isNotEmpty()) {
+            style.getLayer(osmSeamarkId)?.setProperties(
+                PropertyFactory.rasterOpacity(0f)
+            )
+        }
     }
 
     fun updateNightMode(
@@ -170,15 +179,43 @@ object ChartOverlay {
     }
 
     fun updateSeamarkVisibility(style: Style, seamarkLayerIds: List<String>, chartOpacity: Float) {
+        // The OSM seamark layers (DYNAMIC_icon_*) and WFS layers are no longer
+        // toggled by chart opacity; they are always visible unless a VV feature
+        // overrides them via setDynamicIconVisibility. This function now only
+        // toggles the seamark raster fallback layers that are passed via
+        // seamarkLayerIds, if any caller still needs that.
         val shouldHide = chartOpacity > 0.85f
         val v = if (shouldHide) Property.NONE else Property.VISIBLE
         for (id in seamarkLayerIds) {
-            style.getLayer(id)?.setProperties(PropertyFactory.visibility(v))
+            style.getLayer(id)?.setProperties(
+                PropertyFactory.visibility(v)
+            )
         }
-        val wfsVisibility = if (shouldHide) Property.NONE else Property.VISIBLE
-        for (wfsType in WFS_TYPES) {
-            style.getLayer("layer-wfs-$wfsType")?.setProperties(PropertyFactory.visibility(wfsVisibility))
-            style.getLayer("layer-wfs-${wfsType}-label")?.setProperties(PropertyFactory.visibility(wfsVisibility))
+    }
+
+    /**
+     * Set the visibility of the OSM seamark icon layers (DYNAMIC_icon_fixed_rotation
+     * and DYNAMIC_icon_free_rotation) based on whether VV features are in view AND
+     * the chart opacity.
+     *
+     * Call this from both the turvalaite and the notice render path so we have a
+     * single source of truth for the icon-layer visibility. The DYNAMIC_icon layers
+     * contain OSM seamark icons of many types (tuvalaite, notice, light, daymark, …).
+     * When any VV feature is in view the OSM icons should be hidden (we show the
+     * more accurate VV data instead of the OSM copy). At full-raster the OSM icons
+     * are also hidden; they would overlap the chart's own seamark raster.
+     */
+    internal fun setDynamicIconVisibility(
+        style: Style,
+        hideForTurvalaite: Boolean,
+        hideForNotice: Boolean
+    ) {
+        val hide = hideForTurvalaite || hideForNotice
+        val visibility = if (hide) Property.NONE else Property.VISIBLE
+        for (layerId in listOf("DYNAMIC_icon_fixed_rotation", "DYNAMIC_icon_free_rotation")) {
+            style.getLayer(layerId)?.setProperties(
+                PropertyFactory.visibility(visibility)
+            )
         }
     }
 
