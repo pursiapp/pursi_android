@@ -114,25 +114,28 @@ fun AppNavigation(
     }
 
     LaunchedEffect(Unit) {
-        val permissionsToRequest = mutableListOf(Manifest.permission.ACCESS_FINE_LOCATION)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            permissionsToRequest.add(Manifest.permission.POST_NOTIFICATIONS)
-        }
-        val allGranted = permissionsToRequest.all {
-            ContextCompat.checkSelfPermission(context, it) ==
-                android.content.pm.PackageManager.PERMISSION_GRANTED
-        }
-        if (allGranted) {
-            try {
-                val intent = Intent(context, app.pursi.location.LocationService::class.java)
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    context.startForegroundService(intent)
-                } else {
-                    context.startService(intent)
-                }
-            } catch (_: Exception) { }
-        } else {
-            locationPermissionLauncher.launch(permissionsToRequest.toTypedArray())
+        val prefs = context.getSharedPreferences("pursi_map", Context.MODE_PRIVATE)
+        if (prefs.getBoolean("onboarding_shown", false)) {
+            val permissionsToRequest = mutableListOf(Manifest.permission.ACCESS_FINE_LOCATION)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                permissionsToRequest.add(Manifest.permission.POST_NOTIFICATIONS)
+            }
+            val allGranted = permissionsToRequest.all {
+                ContextCompat.checkSelfPermission(context, it) ==
+                    android.content.pm.PackageManager.PERMISSION_GRANTED
+            }
+            if (allGranted) {
+                try {
+                    val intent = Intent(context, app.pursi.location.LocationService::class.java)
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        context.startForegroundService(intent)
+                    } else {
+                        context.startService(intent)
+                    }
+                } catch (_: Exception) { }
+            } else {
+                locationPermissionLauncher.launch(permissionsToRequest.toTypedArray())
+            }
         }
     }
 
@@ -333,35 +336,49 @@ private fun CompactLayout(shared: SharedState) {
                 } else null
                 val mapViewingRouteId by shared.mapViewModel.viewingRouteId.collectAsStateWithLifecycle()
                 val mapViewingTrackId by shared.mapViewModel.viewingTrackId.collectAsStateWithLifecycle()
-                    MapScreen(
-                        mapViewModel = shared.mapViewModel,
-                        courseLinesEnabled = shared.courseLinesEnabled,
-                        bottomInsetPx = innerPadding.calculateBottomPadding(),
-                        offlineMode = shared.offlineMode,
-                        tilesDirPath = shared.tileStorage.storagePath,
-                        keepScreenOn = shared.keepScreenOn,
-                        centerTarget = centerTarget,
-                        initialCamLat = shared.savedCamLat,
-                        initialCamLon = shared.savedCamLon,
-                        initialCamZoom = shared.savedCamZoom,
-                        onCameraMoved = shared.onCameraMoved,
-                        viewingRouteId = mapViewingRouteId,
-                        onClearViewingRoute = { shared.mapViewModel.setViewingRouteId(null) },
-                        viewingTrackId = mapViewingTrackId,
-                        onClearViewingTrack = { shared.mapViewModel.setViewingTrackId(null) },
-                        onSearchPoi = {
-                            navController.navigate(Routes.RouteList) {
-                                popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                                launchSingleTop = true; restoreState = true
-                            }
-                        },
+                val uiState by shared.mapViewModel.uiState.collectAsStateWithLifecycle()
+                val tileSources = remember(uiState.chartProviders) {
+                    app.pursi.map.TileSourceBuilder.buildFromProviders(uiState.chartProviders)
+                }
+                MapScreen(
+                    mapViewModel = shared.mapViewModel,
+                    courseLinesEnabled = shared.courseLinesEnabled,
+                    bottomInsetPx = innerPadding.calculateBottomPadding(),
+                    offlineMode = shared.offlineMode,
+                    tilesDirPath = shared.tileStorage.storagePath,
+                    keepScreenOn = shared.keepScreenOn,
+                    centerTarget = centerTarget,
+                    initialCamLat = shared.savedCamLat,
+                    initialCamLon = shared.savedCamLon,
+                    initialCamZoom = shared.savedCamZoom,
+                    onCameraMoved = shared.onCameraMoved,
+                    viewingRouteId = mapViewingRouteId,
+                    onClearViewingRoute = { shared.mapViewModel.setViewingRouteId(null) },
+                    viewingTrackId = mapViewingTrackId,
+                    onClearViewingTrack = { shared.mapViewModel.setViewingTrackId(null) },
+                    onSearchPoi = {
+                        navController.navigate(Routes.RouteList) {
+                            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                            launchSingleTop = true; restoreState = true
+                        }
+                    },
                     showDebug = shared.debugMode,
                     isNightMode = shared.isNightMode,
                     windUnit = shared.windUnit,
                     tempUnit = shared.tempUnit,
                     pressureUnit = shared.pressureUnit,
                     windMeterSize = shared.windMeterSize,
-                    snackbarHostState = snackbarHostState
+                    snackbarHostState = snackbarHostState,
+                    downloadManager = shared.downloadManager,
+                    pmtilesDownloader = shared.pmtilesDownloader,
+                    vvDataDownloader = shared.vvDataDownloader,
+                    tileSources = tileSources,
+                    onChooseCustom = {
+                        navController.navigate(Routes.Settings) {
+                            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                            launchSingleTop = true; restoreState = true
+                        }
+                    }
                 )
             }
             composable<Routes.RouteList> {
@@ -505,6 +522,10 @@ private fun ExpandedLayout(shared: SharedState, isPortrait: Boolean) {
                 onConsumeAreaResult = { pendingAreaResult = null }
             )
         }
+        val expandedUiState by shared.mapViewModel.uiState.collectAsStateWithLifecycle()
+        val expandedTileSources = remember(expandedUiState.chartProviders) {
+            app.pursi.map.TileSourceBuilder.buildFromProviders(expandedUiState.chartProviders)
+        }
         val mapContent = @Composable {
             MapScreen(
                 mapViewModel = shared.mapViewModel,
@@ -529,7 +550,12 @@ private fun ExpandedLayout(shared: SharedState, isPortrait: Boolean) {
                 tempUnit = shared.tempUnit,
                 pressureUnit = shared.pressureUnit,
                 windMeterSize = shared.windMeterSize,
-                snackbarHostState = snackbarHostState
+                snackbarHostState = snackbarHostState,
+                downloadManager = shared.downloadManager,
+                pmtilesDownloader = shared.pmtilesDownloader,
+                vvDataDownloader = shared.vvDataDownloader,
+                tileSources = expandedTileSources,
+                onChooseCustom = { showAreaSelector = true }
             )
         }
 

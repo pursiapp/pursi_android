@@ -5,9 +5,20 @@ import android.location.Location
 import android.view.WindowManager
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.Text
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.*
@@ -140,7 +151,12 @@ fun MapScreen(
     tempUnit: WeatherUnitPrefs.TempUnit = WeatherUnitPrefs.TempUnit.CELSIUS,
     pressureUnit: WeatherUnitPrefs.PressureUnit = WeatherUnitPrefs.PressureUnit.HPA,
     windMeterSize: WeatherUnitPrefs.WindMeterSize = WeatherUnitPrefs.WindMeterSize.AUTO,
-    snackbarHostState: SnackbarHostState? = null
+    snackbarHostState: SnackbarHostState? = null,
+    downloadManager: app.pursi.map.DownloadManager? = null,
+    pmtilesDownloader: app.pursi.map.PmtilesDownloader? = null,
+    vvDataDownloader: app.pursi.map.VvDataDownloader? = null,
+    tileSources: List<app.pursi.map.TileSource>? = null,
+    onChooseCustom: (() -> Unit)? = null
 ) {
     val location by mapViewModel.currentLocation.collectAsStateWithLifecycle()
     val context = LocalContext.current
@@ -815,13 +831,45 @@ fun MapScreen(
         )
 
         if (showOnboarding) {
+            val dismissOnboarding = {
+                showOnboarding = false
+                prefs.edit().putBoolean("onboarding_shown", true).apply()
+            }
             OnboardingOverlay(
-                onComplete = {
-                    showOnboarding = false
-                    prefs.edit().putBoolean("onboarding_shown", true).apply()
+                onComplete = dismissOnboarding,
+                modifier = Modifier.fillMaxSize(),
+                downloadManager = downloadManager,
+                pmtilesDownloader = pmtilesDownloader,
+                vvDataDownloader = vvDataDownloader,
+                currentLatLng = location?.let { LatLng(it.latitude, it.longitude) },
+                onChooseCustom = {
+                    dismissOnboarding()
+                    onChooseCustom?.invoke()
                 },
-                modifier = Modifier.fillMaxSize()
+                tileSources = tileSources
             )
+        }
+
+        val downloadProgress by downloadManager?.progress?.collectAsStateWithLifecycle()
+            ?: remember { mutableStateOf(emptyMap()) }
+        val runningJob = downloadProgress.values.firstOrNull { it.status == "RUNNING" || it.status == "PENDING" }
+        if (!showOnboarding && runningJob != null) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(top = 56.dp, end = 16.dp)
+                    .size(32.dp)
+                    .background(
+                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
+                        CircleShape
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(16.dp),
+                    strokeWidth = 2.dp
+                )
+            }
         }
     }
 }

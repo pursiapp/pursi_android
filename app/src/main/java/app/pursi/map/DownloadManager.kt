@@ -10,8 +10,10 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import java.util.UUID
 
 class DownloadManager(
@@ -94,7 +96,7 @@ class DownloadManager(
                     extension = source.extension,
                     tiles = tiles
                 ) { done, _ ->
-                    completed = done
+                    completed += done
                     val total = tileCount * sources.size
                     _progress.update { it.toMutableMap().apply {
                         put(jobId, DownloadProgress(jobId, name, "RUNNING", completed, total, source.providerId, rectanglesJson = rectanglesJson, snapshotPath = snapshotPath, providerIds = providerIds.joinToString(","), createdAt = job.createdAt))
@@ -111,6 +113,28 @@ class DownloadManager(
             } }
         }
         return jobId
+    }
+
+    suspend fun enqueueAndAwait(
+        name: String,
+        rectangles: List<LatLngRect>,
+        minZoom: Int,
+        maxZoom: Int,
+        selectedLayers: List<String>,
+        providerIds: List<String>,
+        tileSources: List<TileSource>,
+        snapshotPath: String? = null
+    ): Boolean {
+        val jobId = enqueue(name, rectangles, minZoom, maxZoom,
+            selectedLayers, providerIds, tileSources, snapshotPath)
+            ?: return false
+        return withTimeoutOrNull(900_000L) {
+            val finalState = _progress.first { map ->
+                val s = map[jobId]?.status
+                s == "COMPLETED" || s == "FAILED" || s == "CANCELLED"
+            }
+            finalState[jobId]?.status == "COMPLETED"
+        } ?: false
     }
 
     suspend fun cancel(jobId: String) {

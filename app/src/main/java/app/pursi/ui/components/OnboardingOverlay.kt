@@ -1,5 +1,10 @@
 package app.pursi.ui.components
 
+import android.Manifest
+import android.content.Intent
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -12,15 +17,21 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -30,25 +41,78 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import app.pursi.R
+import app.pursi.location.LocationService
+import app.pursi.map.LatLngRect
+import app.pursi.map.TileSource
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import org.maplibre.android.geometry.LatLng
+import java.util.Locale
 
 enum class OnboardingStep {
     DISCLAIMER,
+    LOCATION_PERMISSION,
+    OFFLINE_PREP,
     TIPS
+}
+
+private enum class OfflinePhase {
+    IDLE,
+    DETECTING,
+    DOWNLOADING,
+    SUCCESS,
+    FAILED
+}
+
+private enum class ZoomLevel(
+    val minZoom: Int,
+    val maxZoom: Int,
+    val chartsMb: Int
+) {
+    LOW(8, 9, 13),
+    MEDIUM(8, 10, 55),
+    HIGH(8, 11, 222)
 }
 
 @Composable
 fun OnboardingOverlay(
     onComplete: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    downloadManager: app.pursi.map.DownloadManager? = null,
+    pmtilesDownloader: app.pursi.map.PmtilesDownloader? = null,
+    vvDataDownloader: app.pursi.map.VvDataDownloader? = null,
+    currentLatLng: LatLng? = null,
+    onChooseCustom: (() -> Unit)? = null,
+    tileSources: List<TileSource>? = null
 ) {
     var step by remember { mutableStateOf(OnboardingStep.DISCLAIMER) }
+
+    val context = LocalContext.current
+    val locationPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        if (permissions.values.all { it }) {
+            try {
+                val intent = Intent(context, LocationService::class.java)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    context.startForegroundService(intent)
+                } else {
+                    context.startService(intent)
+                }
+            } catch (_: Exception) { }
+        }
+    }
 
     Box(
         modifier = modifier
@@ -59,13 +123,36 @@ fun OnboardingOverlay(
         when (step) {
             OnboardingStep.DISCLAIMER -> {
                 DisclaimerContent(
-                    onAccept = { step = OnboardingStep.TIPS }
+                    onAccept = { step = OnboardingStep.LOCATION_PERMISSION }
+                )
+            }
+            OnboardingStep.LOCATION_PERMISSION -> {
+                LocationPermissionContent(
+                    onAllow = {
+                        val permissionsToRequest = mutableListOf(Manifest.permission.ACCESS_FINE_LOCATION)
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                            permissionsToRequest.add(Manifest.permission.POST_NOTIFICATIONS)
+                        }
+                        locationPermissionLauncher.launch(permissionsToRequest.toTypedArray())
+                        step = OnboardingStep.OFFLINE_PREP
+                    },
+                    onDeny = { step = OnboardingStep.OFFLINE_PREP }
+                )
+            }
+            OnboardingStep.OFFLINE_PREP -> {
+                OfflinePrepContent(
+                    downloadManager = downloadManager,
+                    pmtilesDownloader = pmtilesDownloader,
+                    vvDataDownloader = vvDataDownloader,
+                    currentLatLng = currentLatLng,
+                    onChooseCustom = onChooseCustom,
+                    tileSources = tileSources,
+                    onSkip = { step = OnboardingStep.TIPS },
+                    onComplete = onComplete
                 )
             }
             OnboardingStep.TIPS -> {
-                TipsContent(
-                    onComplete = onComplete
-                )
+                TipsContent(onComplete = onComplete)
             }
         }
     }
@@ -115,6 +202,392 @@ private fun DisclaimerContent(
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun LocationPermissionContent(
+    onAllow: () -> Unit,
+    onDeny: () -> Unit
+) {
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            modifier = Modifier
+                .padding(32.dp)
+                .background(
+                    MaterialTheme.colorScheme.surface,
+                    RoundedCornerShape(20.dp)
+                )
+                .padding(28.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = stringResource(R.string.onboarding_permission_title),
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary
+            )
+            Spacer(Modifier.height(20.dp))
+            Text(
+                text = stringResource(R.string.onboarding_permission_text),
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+                textAlign = TextAlign.Start
+            )
+            Spacer(Modifier.height(28.dp))
+            Button(
+                onClick = onAllow,
+                modifier = Modifier.fillMaxWidth().height(52.dp),
+                shape = RoundedCornerShape(14.dp)
+            ) {
+                Text(
+                    text = stringResource(R.string.onboarding_permission_allow),
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+            Spacer(Modifier.height(8.dp))
+            TextButton(
+                onClick = onDeny,
+                modifier = Modifier.fillMaxWidth().height(44.dp)
+            ) {
+                Text(
+                    text = stringResource(R.string.onboarding_permission_deny),
+                    fontSize = 14.sp
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun OfflinePrepContent(
+    downloadManager: app.pursi.map.DownloadManager?,
+    pmtilesDownloader: app.pursi.map.PmtilesDownloader?,
+    vvDataDownloader: app.pursi.map.VvDataDownloader?,
+    currentLatLng: LatLng?,
+    onChooseCustom: (() -> Unit)?,
+    tileSources: List<TileSource>?,
+    onSkip: () -> Unit,
+    onComplete: () -> Unit
+) {
+    val scope = rememberCoroutineScope()
+    var phase by remember { mutableStateOf(OfflinePhase.DETECTING) }
+    var profile by remember { mutableStateOf(OnboardingProfile.EUROPE) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+    var selectedZoom by remember { mutableStateOf(ZoomLevel.HIGH) }
+
+    val pmtilesContinentProgress by pmtilesDownloader?.continentProgress?.collectAsState()
+        ?: remember { mutableStateOf(emptyMap()) }
+
+    LaunchedEffect(Unit) {
+        profile = detectOnboardingProfile(
+            localeCountry = Locale.getDefault().country,
+            lastKnownLatLng = currentLatLng
+        )
+        phase = OfflinePhase.IDLE
+    }
+
+    val finlandRect = remember {
+        LatLngRect(minLat = 58.5, maxLat = 70.5, minLng = 19.0, maxLng = 32.0)
+    }
+
+    val pmtilesMb = 80
+    val vvMb = 12
+    val totalMb = if (profile == OnboardingProfile.FINLAND)
+        pmtilesMb + vvMb + selectedZoom.chartsMb
+    else
+        pmtilesMb
+
+    val zoomLabels = listOf(
+        R.string.onboarding_offline_zoom_low to ZoomLevel.LOW,
+        R.string.onboarding_offline_zoom_med to ZoomLevel.MEDIUM,
+        R.string.onboarding_offline_zoom_high to ZoomLevel.HIGH
+    )
+
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            modifier = Modifier
+                .padding(24.dp)
+                .background(
+                    MaterialTheme.colorScheme.surface,
+                    RoundedCornerShape(20.dp)
+                )
+                .padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = stringResource(R.string.onboarding_offline_title),
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary,
+                textAlign = TextAlign.Center
+            )
+            Spacer(Modifier.height(12.dp))
+            Text(
+                text = stringResource(R.string.onboarding_offline_body),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                textAlign = TextAlign.Center
+            )
+
+            Spacer(Modifier.height(20.dp))
+
+            when (phase) {
+                OfflinePhase.DETECTING -> {
+                    Text(
+                        text = stringResource(R.string.onboarding_offline_detecting),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                }
+                OfflinePhase.IDLE -> {
+                    Text(
+                        text = stringResource(R.string.onboarding_offline_recommendation),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(12.dp))
+
+                    if (profile == OnboardingProfile.FINLAND) {
+                        Text(
+                            text = stringResource(R.string.onboarding_offline_zoom_label),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            zoomLabels.forEach { (labelRes, level) ->
+                                val isSelected = selectedZoom == level
+                                val size = if (profile == OnboardingProfile.FINLAND)
+                                    pmtilesMb + vvMb + level.chartsMb
+                                else pmtilesMb
+                                Button(
+                                    onClick = { selectedZoom = level },
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(56.dp),
+                                    shape = RoundedCornerShape(12.dp),
+                                    colors = if (isSelected) ButtonDefaults.buttonColors()
+                                    else ButtonDefaults.buttonColors(
+                                        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                        contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                                    ),
+                                    contentPadding = androidx.compose.foundation.layout.PaddingValues(4.dp)
+                                ) {
+                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                        Text(
+                                            text = stringResource(labelRes),
+                                            fontSize = 12.sp,
+                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                            maxLines = 1
+                                        )
+                                        Text(
+                                            text = stringResource(R.string.onboarding_offline_zoom_size_fmt, size),
+                                            fontSize = 10.sp,
+                                            maxLines = 1
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                        Spacer(Modifier.height(16.dp))
+                    }
+
+                    Column(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp)
+                    ) {
+                        if (profile == OnboardingProfile.FINLAND) {
+                            ContentRow(
+                                nameRes = R.string.onboarding_offline_content_charts,
+                                sizeMb = selectedZoom.chartsMb
+                            )
+                        }
+                        ContentRow(
+                            nameRes = R.string.onboarding_offline_content_seamarks,
+                            sizeMb = pmtilesMb
+                        )
+                        if (profile == OnboardingProfile.FINLAND) {
+                            ContentRow(
+                                nameRes = R.string.onboarding_offline_content_vv,
+                                sizeMb = vvMb
+                            )
+                        }
+                    }
+
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = stringResource(R.string.onboarding_offline_total_fmt, totalMb),
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+
+                    Spacer(Modifier.height(12.dp))
+                    Text(
+                        text = stringResource(R.string.onboarding_offline_footer),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center
+                    )
+
+                    Spacer(Modifier.height(16.dp))
+
+                    val failedNetworkMsg = stringResource(R.string.onboarding_offline_failed_network)
+                    if (downloadManager != null && pmtilesDownloader != null) {
+                        Button(
+                            onClick = {
+                                scope.launch {
+                                    phase = OfflinePhase.DOWNLOADING
+                                    errorMessage = null
+
+                                    // Fire-and-forget: chart downloads continue in background
+                                    if (profile == OnboardingProfile.FINLAND) {
+                                        launch {
+                                            val traficomSources = tileSources?.filter { it.providerId == "fi-traficom" }
+                                            if (!traficomSources.isNullOrEmpty()) {
+                                                downloadManager.enqueueAndAwait(
+                                                    name = "Onboarding: Traficom",
+                                                    rectangles = listOf(finlandRect),
+                                                    minZoom = selectedZoom.minZoom,
+                                                    maxZoom = selectedZoom.maxZoom,
+                                                    selectedLayers = emptyList(),
+                                                    providerIds = listOf("fi-traficom"),
+                                                    tileSources = traficomSources
+                                                )
+                                            }
+                                        }
+                                    }
+
+                                    // Await only fast tasks: PMTiles + VV data
+                                    val fastTasks = mutableListOf<kotlinx.coroutines.Deferred<Boolean>>()
+                                    fastTasks += async { pmtilesDownloader.downloadContinent("europe") }
+                                    if (profile == OnboardingProfile.FINLAND) {
+                                        fastTasks += async { vvDataDownloader?.download() != false }
+                                    }
+
+                                    val fastResults = fastTasks.awaitAll()
+                                    if (fastResults.all { it }) {
+                                        phase = OfflinePhase.SUCCESS
+                                        kotlinx.coroutines.delay(1500L)
+                                        onComplete()
+                                    } else {
+                                        phase = OfflinePhase.FAILED
+                                        errorMessage = failedNetworkMsg
+                                    }
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth().height(52.dp),
+                            shape = RoundedCornerShape(14.dp)
+                        ) {
+                            Text(
+                                text = stringResource(R.string.onboarding_offline_download_now_fmt, totalMb),
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+
+                    Spacer(Modifier.height(4.dp))
+                    TextButton(onClick = onSkip) {
+                        Text(
+                            text = stringResource(R.string.onboarding_offline_skip),
+                            fontSize = 14.sp
+                        )
+                    }
+                }
+                OfflinePhase.DOWNLOADING -> {
+                    val pmtilesPct = pmtilesContinentProgress["europe"] ?: 0f
+                    val pmtilesDone = pmtilesPct >= 100f
+                    val displayPct = if (pmtilesDone) 100 else pmtilesPct.toInt().coerceIn(0, 99)
+
+                    Text(
+                        text = if (!pmtilesDone)
+                            stringResource(R.string.onboarding_offline_progress_status_pmtiles, displayPct)
+                        else
+                            stringResource(R.string.onboarding_offline_progress_status_vv),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    LinearProgressIndicator(
+                        progress = { pmtilesPct / 100f },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(Modifier.height(16.dp))
+                    TextButton(onClick = onSkip) {
+                        Text(
+                            text = stringResource(R.string.onboarding_offline_skip),
+                            fontSize = 14.sp
+                        )
+                    }
+                }
+                OfflinePhase.SUCCESS -> {
+                    Text(
+                        text = stringResource(R.string.onboarding_offline_done),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+                OfflinePhase.FAILED -> {
+                    Text(
+                        text = errorMessage ?: stringResource(R.string.onboarding_offline_failed_network),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        OutlinedButton(
+                            onClick = { phase = OfflinePhase.IDLE },
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Text(stringResource(R.string.onboarding_offline_retry))
+                        }
+                        TextButton(onClick = onSkip) {
+                            Text(stringResource(R.string.onboarding_offline_skip))
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ContentRow(nameRes: Int, sizeMb: Int) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = "•",
+            color = MaterialTheme.colorScheme.primary,
+            fontSize = 16.sp
+        )
+        Spacer(Modifier.width(8.dp))
+        Text(
+            text = stringResource(nameRes),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Spacer(Modifier.weight(1f))
+        Text(
+            text = "~${sizeMb} MB",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }
 
