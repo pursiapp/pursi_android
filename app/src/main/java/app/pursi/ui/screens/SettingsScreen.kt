@@ -818,10 +818,14 @@ fun SettingsScreen(
                     Text(stringResource(R.string.location_source_desc),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                    Spacer(Modifier.height(4.dp))
+                    Text(stringResource(R.string.location_privacy_note),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
                 }
             }
         }
-
+        
         // ── TIETOA ──
         item { SectionHeader(stringResource(R.string.settings_section_about)) }
 

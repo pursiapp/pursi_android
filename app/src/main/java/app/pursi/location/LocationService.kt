@@ -116,7 +116,7 @@ class LocationService : Service() {
         if (!hasLocationPermission()) return
         stopLocationUpdates()
         useGoogleLocation = getSharedPreferences("pursi_map", Context.MODE_PRIVATE)
-            .getBoolean("use_google_location", false)
+            .getBoolean("use_google_location", true)
         if (useGoogleLocation) {
             startGoogleLocationUpdates()
         } else {
