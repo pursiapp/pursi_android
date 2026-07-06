@@ -157,6 +157,7 @@
     <string name="nav_course_up">Kurs opp</string>
     <string name="weather_overlays_title">Værkartlag</string>
     <string name="lightning_overlay">Lynnedslag</string>
+    <string name="lightning_live_label">TORDENVÆR</string>
     <string name="lightning_overlay_desc">Vis nylige lynnedslag på kartet</string>
     <string name="warnings_overlay">Værvarsler</string>
     <string name="warnings_overlay_desc">Vis varslingsområder som fargekodede polygoner på kartet</string>

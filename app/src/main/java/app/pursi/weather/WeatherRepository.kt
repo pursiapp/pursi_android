@@ -73,6 +73,7 @@ class WeatherRepository @Inject constructor(
         private const val LIGHTNING_FAST_MS = 60_000L // 1 min
         private const val LIGHTNING_EMPTY_THRESHOLD = 30 // 30 empty checks before slow mode
         private const val MIN_MOVE_M = 10_000.0 // 10 km
+        private const val WARNINGS_REFRESH_MS = 600_000L // 10 min
     }
 
     enum class LightningMode { SLOW, FAST }
@@ -83,6 +84,7 @@ class WeatherRepository @Inject constructor(
     private var coreRefreshJob: Job? = null
     private var forecastRefreshJob: Job? = null
     private var lightningRefreshJob: Job? = null
+    private var warningsRefreshJob: Job? = null
 
     // ── Public StateFlows ────────────────────────────────────────────────
 
@@ -145,6 +147,15 @@ class WeatherRepository @Inject constructor(
     fun startAutoRefresh() {
         stopAutoRefresh()
 
+        warningsRefreshJob = scope.launch {
+            refreshWarningsOnly()
+            while (isActive) {
+                pauseGate()
+                delay(WARNINGS_REFRESH_MS)
+                refreshWarningsOnly()
+            }
+        }
+
         coreRefreshJob = scope.launch {
             refresh()
             while (isActive) {
@@ -194,6 +205,7 @@ class WeatherRepository @Inject constructor(
     }
 
     fun stopAutoRefresh() {
+        warningsRefreshJob?.cancel(); warningsRefreshJob = null
         coreRefreshJob?.cancel(); coreRefreshJob = null
         forecastRefreshJob?.cancel(); forecastRefreshJob = null
         lightningRefreshJob?.cancel(); lightningRefreshJob = null
@@ -223,6 +235,23 @@ class WeatherRepository @Inject constructor(
     fun destroy() {
         stopAutoRefresh()
         scope.cancel()
+    }
+
+    // ── Warnings-only refresh (no GPS required) ─────────────────────────
+
+    private suspend fun refreshWarningsOnly() {
+        val warningProvider = sourceResolver.warningProviderFor(60.0, 24.0)
+        if (warningProvider == null) return
+
+        val locales = context.resources.configuration.locales
+        val lang = if (locales.isEmpty()) "fi" else locales[0].language
+
+        val fetchedWarnings = withTimeoutOrNull(15_000L) {
+            warningProvider.getMarineWarnings(lang, 60.0, 24.0)
+        } ?: emptyList()
+        _warnings.value = fetchedWarnings
+        persistWarnings(fetchedWarnings)
+        prefs.edit().putLong(KEY_WARNING_TIME, System.currentTimeMillis()).apply()
     }
 
     // ── Lightning adaptive refresh ───────────────────────────────────────

@@ -157,6 +157,7 @@
     <string name="nav_course_up">Kurs oben</string>
     <string name="weather_overlays_title">Wetterkarten-Überlagerungen</string>
     <string name="lightning_overlay">Blitzeinschläge</string>
+    <string name="lightning_live_label">GEWITTER</string>
     <string name="lightning_overlay_desc">Aktuelle Blitzeinschläge auf der Karte anzeigen</string>
     <string name="warnings_overlay">Wetterwarnungen</string>
     <string name="warnings_overlay_desc">Warngebiete als farbige Polygone auf der Karte anzeigen</string>

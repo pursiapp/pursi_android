@@ -103,9 +103,9 @@ class MapViewModel @Inject constructor(
 
     private val _nightMode = MutableStateFlow(
         try { NightMode.valueOf(savedStateHandle.get<String>("nightMode")
-            ?: prefs.getString("night_mode", NightMode.AUTO.name)
-            ?: NightMode.AUTO.name) }
-        catch (_: Exception) { NightMode.AUTO }
+            ?: prefs.getString("night_mode", NightMode.DAY.name)
+            ?: NightMode.DAY.name) }
+        catch (_: Exception) { NightMode.DAY }
     )
     val nightMode: StateFlow<NightMode> = _nightMode.asStateFlow()
 
@@ -183,6 +183,17 @@ class MapViewModel @Inject constructor(
     }
 
     val warnings: StateFlow<List<MarineWarning>> = weatherRepository.warnings
+
+    private val _requestedWeatherTab = MutableStateFlow(-1)
+    val requestedWeatherTab: StateFlow<Int> = _requestedWeatherTab.asStateFlow()
+
+    fun requestWeatherTab(tab: Int) { _requestedWeatherTab.value = tab }
+
+    fun consumeRequestedWeatherTab(): Int {
+        val tab = _requestedWeatherTab.value
+        if (tab >= 0) _requestedWeatherTab.value = -1
+        return tab
+    }
 
     val lightning: StateFlow<List<app.pursi.weather.LightningStrike>> = weatherRepository.lightning
 

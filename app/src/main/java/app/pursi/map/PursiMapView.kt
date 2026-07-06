@@ -948,7 +948,7 @@ private fun Style.loadOfmSprite(context: android.content.Context) {
 private fun Style.loadPoiIcons(context: android.content.Context) {
     val names = listOf(
         "sauna", "bbq", "bench", "shower", "firepit", "campfire",
-        "viewpoint", "information"
+        "viewpoint", "information", "lightning"
     )
     var loaded = 0
     for (name in names) {

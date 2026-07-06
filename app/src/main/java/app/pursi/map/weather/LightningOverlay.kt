@@ -14,7 +14,7 @@ object LightningOverlay {
 
     private const val SOURCE_ID = "pursi-lightning"
     private const val LAYER_ID = "layer-lightning"
-    private const val LIGHTNING_SYMBOL = "⚡"
+    private const val LIGHTNING_ICON = "lightning"
 
     fun update(style: Style, strikes: List<LightningStrike>, nowEpoch: Long = System.currentTimeMillis() / 1000) {
         if (strikes.isEmpty()) {
@@ -24,11 +24,11 @@ object LightningOverlay {
 
         val features = strikes.mapNotNull { strike ->
             val ageMin = (nowEpoch - strike.epochTimestamp) / 60L
+            if (ageMin >= 60) return@mapNotNull null
             val color = when {
                 ageMin < 5 -> "#FF0000"
                 ageMin < 30 -> "#FF8800"
-                ageMin < 60 -> "#FFCC00"
-                else -> return@mapNotNull null
+                else -> "#FFCC00"
             }
 
             Feature.fromGeometry(Point.fromLngLat(strike.longitude, strike.latitude)).apply {
@@ -54,17 +54,22 @@ object LightningOverlay {
 
         val layer = SymbolLayer(LAYER_ID, SOURCE_ID).apply {
             setProperties(
-                PropertyFactory.textField(LIGHTNING_SYMBOL),
-                PropertyFactory.textColor(Expression.get("color")),
-                PropertyFactory.textSize(
+                PropertyFactory.iconImage(LIGHTNING_ICON),
+                PropertyFactory.iconColor(Expression.get("color")),
+                PropertyFactory.iconSize(
                     Expression.interpolate(Expression.linear(), Expression.zoom(),
-                        Expression.stop(6, Expression.literal(10f)),
-                        Expression.stop(10, Expression.literal(16f)),
-                        Expression.stop(14, Expression.literal(22f)))
+                        Expression.stop(6, Expression.literal(0.5f)),
+                        Expression.stop(10, Expression.literal(0.8f)),
+                        Expression.stop(14, Expression.literal(1.2f)))
                 ),
-                PropertyFactory.textAllowOverlap(true),
-                PropertyFactory.textIgnorePlacement(true),
-                PropertyFactory.textAnchor("center")
+                PropertyFactory.iconOpacity(
+                    Expression.interpolate(Expression.linear(), Expression.get("ageMin"),
+                        Expression.stop(0, Expression.literal(1.0f)),
+                        Expression.stop(60, Expression.literal(0.0f)))
+                ),
+                PropertyFactory.iconAllowOverlap(true),
+                PropertyFactory.iconIgnorePlacement(true),
+                PropertyFactory.iconAnchor("center")
             )
         }
         style.addLayerAbove(layer, "layer-openseamap")

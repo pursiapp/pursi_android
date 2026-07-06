@@ -159,6 +159,7 @@
     <string name="nav_course_up">Kurs upp</string>
     <string name="weather_overlays_title">Väderkartlager</string>
     <string name="lightning_overlay">Blixtnedslag</string>
+    <string name="lightning_live_label">ÅSKA</string>
     <string name="lightning_overlay_desc">Visa senaste blixtnedslag på kartan</string>
     <string name="warnings_overlay">Vädervarningar</string>
     <string name="warnings_overlay_desc">Visa varningsområden som färgkodade polygoner på kartan</string>

@@ -363,6 +363,12 @@ private fun CompactLayout(shared: SharedState) {
                     },
                     showDebug = shared.debugMode,
                     isNightMode = shared.isNightMode,
+                    onNavigateToWarnings = {
+                        navController.navigate(Routes.Weather) {
+                            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                            launchSingleTop = true; restoreState = true
+                        }
+                    },
                     windUnit = shared.windUnit,
                     tempUnit = shared.tempUnit,
                     pressureUnit = shared.pressureUnit,

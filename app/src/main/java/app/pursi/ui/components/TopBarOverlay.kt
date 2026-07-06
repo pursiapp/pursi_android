@@ -42,6 +42,7 @@ fun TopBarOverlay(
     orientationLabel: String?,
     onSpeedUnitClick: () -> Unit,
     onCompassClick: () -> Unit,
+    onWarningClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     Box(modifier = modifier.fillMaxSize()) {
@@ -62,7 +63,7 @@ fun TopBarOverlay(
                     SpeedIndicator(speedMps = smoothedSpeed, unit = speedUnit)
                 }
                 if (visibleWarnings.isNotEmpty()) {
-                    WarningBadge(visibleWarnings)
+                    WarningBadge(visibleWarnings, onWarningClick)
                 }
                 if (lightningMode == WeatherRepository.LightningMode.FAST) {
                     Card(
@@ -70,7 +71,7 @@ fun TopBarOverlay(
                         shape = RoundedCornerShape(4.dp)
                     ) {
                         Text(
-                            "⚡ LIVE",
+                            "⚡ ${stringResource(R.string.lightning_live_label)}",
                             style = MaterialTheme.typography.labelSmall,
                             fontWeight = FontWeight.Bold,
                             color = Color.White,
@@ -123,7 +124,7 @@ fun TopBarOverlay(
 }
 
 @Composable
-private fun WarningBadge(warnings: List<MarineWarning>) {
+private fun WarningBadge(warnings: List<MarineWarning>, onClick: () -> Unit) {
     val icon: String
     val bgColor: Color
     when {
@@ -141,7 +142,12 @@ private fun WarningBadge(warnings: List<MarineWarning>) {
         modifier = Modifier
             .padding(top = 4.dp)
             .size(32.dp)
-            .background(bgColor, CircleShape),
+            .background(bgColor, CircleShape)
+            .clickable { onClick() }
+            .semantics {
+                role = Role.Button
+                contentDescription = icon
+            },
         contentAlignment = Alignment.Center
     ) {
         Text(icon, style = MaterialTheme.typography.titleSmall)

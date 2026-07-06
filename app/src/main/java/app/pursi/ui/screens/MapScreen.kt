@@ -145,6 +145,7 @@ fun MapScreen(
     onClearViewingTrack: () -> Unit = {},
     showDebug: Boolean = false,
     isNightMode: Boolean = false,
+    onNavigateToWarnings: () -> Unit = {},
     windUnit: WeatherUnitPrefs.WindUnit = WeatherUnitPrefs.WindUnit.MS,
     tempUnit: WeatherUnitPrefs.TempUnit = WeatherUnitPrefs.TempUnit.CELSIUS,
     pressureUnit: WeatherUnitPrefs.PressureUnit = WeatherUnitPrefs.PressureUnit.HPA,
@@ -357,7 +358,7 @@ fun MapScreen(
     val relevantWarnings = if (loc != null) {
         warnings.filter { it.polygonCoords.isEmpty() || app.pursi.weather.pointInPolygon(loc.latitude, loc.longitude, it.polygonCoords) }
     } else {
-        emptyList()
+        warnings.filter { it.polygonCoords.isEmpty() }
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -535,7 +536,11 @@ fun MapScreen(
                 }
                 WeatherUnitPrefs.setSpeedUnit(prefs, speedUnit)
             },
-            onCompassClick = { mapViewModel.cycleOrientationMode() }
+            onCompassClick = { mapViewModel.cycleOrientationMode() },
+            onWarningClick = {
+                mapViewModel.requestWeatherTab(2)
+                onNavigateToWarnings()
+            }
         )
 
         MapControls(

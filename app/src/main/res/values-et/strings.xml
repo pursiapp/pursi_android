@@ -157,6 +157,7 @@
     <string name="nav_course_up">Suund üleval</string>
     <string name="weather_overlays_title">Ilma kaardikihid</string>
     <string name="lightning_overlay">Välgulöögid</string>
+    <string name="lightning_live_label">ÄIKE</string>
     <string name="lightning_overlay_desc">Kuva hiljutised välgulöögid kaardil</string>
     <string name="warnings_overlay">Ilmahooiatused</string>
     <string name="warnings_overlay_desc">Kuva hoiatusalad värviliste polügoonidena kaardil</string>

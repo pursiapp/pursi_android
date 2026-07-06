@@ -159,6 +159,7 @@
     <string name="nav_course_up">Course up</string>
     <string name="weather_overlays_title">Weather Map Overlays</string>
     <string name="lightning_overlay">Lightning strikes</string>
+    <string name="lightning_live_label">THUNDERSTORM</string>
     <string name="lightning_overlay_desc">Show recent lightning strikes on the map</string>
     <string name="warnings_overlay">Weather warnings</string>
     <string name="warnings_overlay_desc">Show warning areas as colored polygons on the map</string>

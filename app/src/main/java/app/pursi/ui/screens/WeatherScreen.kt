@@ -94,6 +94,13 @@ fun WeatherScreen(
         }
     }
 
+    LaunchedEffect(Unit) {
+        val tab = mapViewModel.consumeRequestedWeatherTab()
+        if (tab >= 0) {
+            weatherViewModel.setSelectedTab(tab)
+        }
+    }
+
     WeatherContent(weatherViewModel = weatherViewModel, modifier = modifier)
 }
 
