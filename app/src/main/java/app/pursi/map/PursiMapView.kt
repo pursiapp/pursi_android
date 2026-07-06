@@ -53,6 +53,7 @@ import app.pursi.map.ais.AisVesselOverlay
 import app.pursi.map.overlays.BoatOverlay
 import app.pursi.map.overlays.ChartOverlay
 import app.pursi.map.overlays.MeasureOverlay
+import app.pursi.map.overlays.EmodnetDepthOverlay
 import app.pursi.map.overlays.RadarOverlay
 import app.pursi.map.overlays.RouteOverlay
 import app.pursi.map.overlays.WeatherOverlay
@@ -134,6 +135,7 @@ fun PursiMapView(
     seamarksDownloaded: Boolean = false,
     showDepth: Boolean = true,
     depthFeatures: Map<String, List<WfsFeature>> = emptyMap(),
+    emodnetDepthSamples: List<app.pursi.data.model.EmodnetDepthSample> = emptyList(),
     isNightMode: Boolean = false,
     navmarkSize: NavmarkSize = NavmarkSize.MEDIUM,
     boatIconSize: BoatIconSize = BoatIconSize.MEDIUM,
@@ -754,12 +756,30 @@ fun PursiMapView(
         val map = currentMap.value as? MapLibreMap ?: return@LaunchedEffect
         depthGen++
         val myGen = depthGen
+        val count = depthFeatures.values.sumOf { it.size }
+        val types = depthFeatures.keys.joinToString(",")
+        android.util.Log.d("Pursi.Map", "Depth: showDepth=$showDepth types=[$types] count=$count")
         val prepared = withContext(Dispatchers.Default) {
             WfsOverlay.prepareDepth(showDepth, depthFeatures)
         }
+        val preparedInfo = if (prepared != null) "NOT NULL: ${prepared.size} types" else "null"
+        android.util.Log.d("Pursi.Map", "Depth prepared: $preparedInfo")
         map.getStyle { style ->
             if (depthGen != myGen) return@getStyle
             WfsOverlay.applyDepth(style, prepared, isNightMode)
+            android.util.Log.d("Pursi.Map", "Depth applied")
+        }
+    }
+
+    LaunchedEffect(mapReadyToken, showDepth, emodnetDepthSamples) {
+        val map = currentMap.value as? MapLibreMap ?: return@LaunchedEffect
+        map.getStyle { style ->
+            if (showDepth && emodnetDepthSamples.isNotEmpty()) {
+                EmodnetDepthOverlay.setupLayer(style)
+                EmodnetDepthOverlay.updateSamples(style, emodnetDepthSamples)
+            } else {
+                EmodnetDepthOverlay.remove(style)
+            }
         }
     }
 

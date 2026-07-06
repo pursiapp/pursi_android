@@ -1,6 +1,7 @@
 package app.pursi.ui.viewmodel
 
 import app.pursi.water.WaterObservation
+import app.pursi.data.model.EmodnetDepthSample
 import app.pursi.data.model.WfsFeature
 import app.pursi.datasource.core.ChartProvider
 
@@ -35,6 +36,7 @@ data class MapUiState(
     val showDepth: Boolean = true,
     val showWindMeter: Boolean = false,
     val depthFeatures: Map<String, List<WfsFeature>> = emptyMap(),
+    val emodnetDepthSamples: List<EmodnetDepthSample> = emptyList(),
     val navmarkSize: NavmarkSize = NavmarkSize.MEDIUM,
     val boatIconSize: BoatIconSize = BoatIconSize.MEDIUM,
     val boatIconColor: String = "#F57C00",

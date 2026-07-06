@@ -8,6 +8,7 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import app.pursi.data.dao.BoatDao
 import app.pursi.data.dao.DownloadJobDao
+import app.pursi.data.dao.EmodnetDepthSampleDao
 import app.pursi.data.dao.SavedRouteDao
 import app.pursi.data.dao.TrackDao
 import app.pursi.data.dao.TrackSummaryDao
@@ -15,6 +16,7 @@ import app.pursi.data.dao.WaypointDao
 import app.pursi.data.dao.WfsFeatureDao
 import app.pursi.data.model.Boat
 import app.pursi.data.model.DownloadJob
+import app.pursi.data.model.EmodnetDepthSample
 import app.pursi.data.model.RouteWaypoint
 import app.pursi.data.model.SavedRoute
 import app.pursi.data.model.TrackPoint
@@ -31,9 +33,10 @@ import app.pursi.data.model.WfsFeature
         TrackSummary::class,
         SavedRoute::class,
         RouteWaypoint::class,
-        DownloadJob::class
+        DownloadJob::class,
+        EmodnetDepthSample::class
     ],
-    version = 9,
+    version = 11,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -45,6 +48,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun trackSummaryDao(): TrackSummaryDao
     abstract fun savedRouteDao(): SavedRouteDao
     abstract fun downloadJobDao(): DownloadJobDao
+    abstract fun emodnetDepthSampleDao(): EmodnetDepthSampleDao
 
     companion object {
         @Volatile
@@ -76,6 +80,41 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_9_10 = object : Migration(9, 10) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    """CREATE TABLE IF NOT EXISTS emodnet_depth_samples (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        gridKey TEXT NOT NULL,
+                        latitude REAL NOT NULL,
+                        longitude REAL NOT NULL,
+                        depthM REAL NOT NULL,
+                        fetchedAt INTEGER NOT NULL DEFAULT (strftime('%s','now') * 1000)
+                    )"""
+                )
+                database.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_emodnet_depth_samples_gridKey ON emodnet_depth_samples(gridKey)")
+            }
+        }
+
+        private val MIGRATION_10_11 = object : Migration(10, 11) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("DROP TABLE IF EXISTS emodnet_depth_samples")
+                database.execSQL(
+                    """CREATE TABLE IF NOT EXISTS emodnet_depth_samples (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        gridKey TEXT NOT NULL,
+                        latitude REAL NOT NULL,
+                        longitude REAL NOT NULL,
+                        depthAvgM REAL NOT NULL,
+                        depthMinM REAL NOT NULL DEFAULT 0,
+                        depthMaxM REAL NOT NULL DEFAULT 0,
+                        fetchedAt INTEGER NOT NULL DEFAULT (strftime('%s','now') * 1000)
+                    )"""
+                )
+                database.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_emodnet_depth_samples_gridKey ON emodnet_depth_samples(gridKey)")
+            }
+        }
+
         fun getInstance(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -83,7 +122,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "pursi_database"
                 )
-                    .addMigrations(MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9)
+                    .addMigrations(MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11)
                     .build()
                 INSTANCE = instance
                 instance

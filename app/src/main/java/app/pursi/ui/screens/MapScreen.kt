@@ -438,6 +438,7 @@ fun MapScreen(
             waterObservations = uiState.waterObservations,
             showDepth = uiState.showDepth,
             depthFeatures = uiState.depthFeatures,
+            emodnetDepthSamples = uiState.emodnetDepthSamples,
             navmarkSize = uiState.navmarkSize,
             boatIconSize = uiState.boatIconSize,
             boatIconColor = uiState.boatIconColor,

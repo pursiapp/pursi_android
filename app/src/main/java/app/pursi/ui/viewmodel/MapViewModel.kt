@@ -9,13 +9,17 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import app.pursi.data.dao.BoatDao
+import app.pursi.data.dao.EmodnetDepthSampleDao
 import app.pursi.data.dao.SavedRouteDao
 import app.pursi.data.dao.TrackDao
 import app.pursi.data.dao.TrackSummaryDao
+import app.pursi.data.dao.WfsFeatureDao
+import app.pursi.data.model.EmodnetDepthSample
 import app.pursi.data.model.WfsFeature
 import app.pursi.datasource.core.ChartProvider
 import app.pursi.datasource.core.FeatureRendererRegistry
 import app.pursi.datasource.core.SourceResolver
+import app.pursi.datasource.global.EmodnetDepthClient
 import app.pursi.ais.AisRepository
 import app.pursi.ais.AisVessel
 import app.pursi.ais.VesselMetadata
@@ -65,7 +69,10 @@ class MapViewModel @Inject constructor(
     private val locationStateHolder: LocationStateHolder,
     private val aisRepository: AisRepository,
     private val waterObservationRepository: WaterObservationRepository,
-    private val featureRendererRegistry: FeatureRendererRegistry
+    private val featureRendererRegistry: FeatureRendererRegistry,
+    private val emodnetDepthClient: EmodnetDepthClient,
+    private val emodnetDepthSampleDao: EmodnetDepthSampleDao,
+    private val wfsFeatureDao: WfsFeatureDao
 ) : ViewModel() {
     private val prefs = context.getSharedPreferences("pursi_map", Context.MODE_PRIVATE)
 
@@ -166,6 +173,12 @@ class MapViewModel @Inject constructor(
                     }
                 }
             }
+        }
+
+        viewModelScope.launch {
+            val yearMs = 365L * 24 * 3600 * 1000
+            val cutoff = System.currentTimeMillis() - yearMs
+            emodnetDepthSampleDao.clearOlderThan(cutoff)
         }
     }
 
@@ -332,6 +345,7 @@ class MapViewModel @Inject constructor(
         aisRepository.setQueryBounds(minLat, minLng, maxLat, maxLng)
         if (_uiState.value.showDepth) {
             fetchDepthFeatures(minLat, minLng, maxLat, maxLng, zoom)
+            fetchEmodnetDepthFeatures(minLat, minLng, maxLat, maxLng, zoom)
         }
         if (fiState.showVvNavmarks) {
             fetchTurvalaitteet(minLat, minLng, maxLat, maxLng, zoom)
@@ -455,6 +469,39 @@ class MapViewModel @Inject constructor(
                 if (queryResult.features.isNotEmpty()) result[source.featureType] = queryResult.features
             }
             _uiState.update { it.copy(depthFeatures = result) }
+        }
+    }
+
+    private fun fetchEmodnetDepthFeatures(minLat: Double, minLng: Double, maxLat: Double, maxLng: Double, zoom: Double) {
+        if (zoom < MIN_ZOOM_FOR_AREA) return
+
+        viewModelScope.launch {
+            delay(600L)
+
+            val allKeys = emodnetDepthClient.gridKeysForBbox(minLat, minLng, maxLat, maxLng)
+            if (allKeys.isEmpty()) return@launch
+
+            val cached = emodnetDepthSampleDao.getByGridKeys(allKeys)
+            val cachedKeySet = cached.map { it.gridKey }.toSet()
+            val missing = allKeys - cachedKeySet
+
+            if (cached.isNotEmpty()) {
+                _uiState.update { it.copy(emodnetDepthSamples = cached) }
+            }
+
+            if (missing.isEmpty()) return@launch
+
+            val hasTraficomData = _uiState.value.depthFeatures.values.flatten().isNotEmpty()
+            if (hasTraficomData) {
+                _uiState.update { it.copy(emodnetDepthSamples = emptyList()) }
+                return@launch
+            }
+
+            val newSamples = emodnetDepthClient.fetchMissingGridKeys(missing.toList())
+            if (newSamples.isNotEmpty()) {
+                emodnetDepthSampleDao.insertAll(newSamples)
+            }
+            _uiState.update { it.copy(emodnetDepthSamples = cached + newSamples) }
         }
     }
 

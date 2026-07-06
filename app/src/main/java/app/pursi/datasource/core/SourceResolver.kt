@@ -6,7 +6,8 @@ class SourceResolver(
     val warningProviders: Set<WarningProvider>,
     val marineFeatureProviders: Set<MarineFeatureProvider>,
     val radarProviders: Set<RadarProvider> = emptySet(),
-    val aisProviders: Set<AisProvider> = emptySet()
+    val aisProviders: Set<AisProvider> = emptySet(),
+    val depthProviders: Set<DepthProvider> = emptySet()
 ) {
     private inline fun <reified T : Any> resolveAll(
         lat: Double, lon: Double,
@@ -51,4 +52,10 @@ class SourceResolver(
 
     fun aisProviderFor(lat: Double, lon: Double): AisProvider? =
         resolveBest(lat, lon, aisProviders, { it.coverage.contains(lat, lon) }, { it.priority })
+
+    fun depthProvidersFor(lat: Double, lon: Double): List<DepthProvider> =
+        resolveAll(lat, lon, depthProviders, { it.coverage.contains(lat, lon) }, { it.priority })
+
+    fun depthProviderFor(lat: Double, lon: Double): DepthProvider? =
+        depthProvidersFor(lat, lon).firstOrNull()
 }

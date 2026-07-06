@@ -5,11 +5,14 @@ import androidx.lifecycle.SavedStateHandle
 import app.cash.turbine.test
 import app.pursi.ais.AisRepository
 import app.pursi.data.dao.BoatDao
+import app.pursi.data.dao.EmodnetDepthSampleDao
 import app.pursi.data.dao.SavedRouteDao
 import app.pursi.data.dao.TrackDao
 import app.pursi.data.dao.TrackSummaryDao
+import app.pursi.data.dao.WfsFeatureDao
 import app.pursi.datasource.core.FeatureRendererRegistry
 import app.pursi.datasource.core.SourceResolver
+import app.pursi.datasource.global.EmodnetDepthClient
 import app.pursi.location.LocationStateHolder
 import app.pursi.location.TrackRecorder
 import app.pursi.testutils.MainDispatcherRule
@@ -45,6 +48,9 @@ class MapViewModelTest {
     private val aisRepository = mockk<AisRepository>(relaxed = true)
     private val waterObservationRepository = mockk<WaterObservationRepository>(relaxed = true)
     private val featureRendererRegistry = mockk<FeatureRendererRegistry>(relaxed = true)
+    private val emodnetDepthClient = mockk<EmodnetDepthClient>(relaxed = true)
+    private val emodnetDepthSampleDao = mockk<EmodnetDepthSampleDao>(relaxed = true)
+    private val wfsFeatureDao = mockk<WfsFeatureDao>(relaxed = true)
 
     private lateinit var viewModel: MapViewModel
 
@@ -69,7 +75,10 @@ class MapViewModelTest {
             locationStateHolder = locationStateHolder,
             aisRepository = aisRepository,
             waterObservationRepository = waterObservationRepository,
-            featureRendererRegistry = featureRendererRegistry
+            featureRendererRegistry = featureRendererRegistry,
+            emodnetDepthClient = emodnetDepthClient,
+            emodnetDepthSampleDao = emodnetDepthSampleDao,
+            wfsFeatureDao = wfsFeatureDao
         )
     }
 
@@ -247,7 +256,10 @@ class MapViewModelTest {
             locationStateHolder = locationStateHolder,
             aisRepository = aisRepository,
             waterObservationRepository = waterObservationRepository,
-            featureRendererRegistry = featureRendererRegistry
+            featureRendererRegistry = featureRendererRegistry,
+            emodnetDepthClient = emodnetDepthClient,
+            emodnetDepthSampleDao = emodnetDepthSampleDao,
+            wfsFeatureDao = wfsFeatureDao
         )
 
         viewModel.toggleShowLightning()

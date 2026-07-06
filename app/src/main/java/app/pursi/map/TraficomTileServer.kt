@@ -80,7 +80,8 @@ class TraficomTileServer(
             val x = parts[2].toIntOrNull()
                 ?: return LocalTileServer.Response(400, "text/plain", ByteArray(0))
 
-            for (zTry in z downTo 4) {
+            val minFallbackZoom = (z - 6).coerceAtLeast(4)
+            for (zTry in z downTo minFallbackZoom) {
                 val scale = 1 shl (z - zTry)
                 val xTry = x / scale
                 val yTry = y / scale

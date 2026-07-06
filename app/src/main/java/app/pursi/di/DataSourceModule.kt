@@ -9,6 +9,7 @@ import app.pursi.ais.DigitrafficClient
 import app.pursi.data.AppDatabase
 import app.pursi.datasource.core.AisProvider
 import app.pursi.datasource.core.ChartProvider
+import app.pursi.datasource.core.DepthProvider
 import app.pursi.datasource.core.FeatureRenderer
 import app.pursi.datasource.core.FeatureRendererRegistry
 import app.pursi.datasource.core.IalaFeatureRenderer
@@ -20,6 +21,8 @@ import app.pursi.datasource.core.RadarProvider
 import app.pursi.datasource.core.SourceResolver
 import app.pursi.datasource.core.WarningProvider
 import app.pursi.datasource.core.WeatherProvider
+import app.pursi.datasource.fi.TraficomDepthProvider
+import app.pursi.datasource.global.EmodnetDepthProvider
 //import app.pursi.datasource.dk.DanishChartProvider
 import app.pursi.datasource.fi.DigitrafficAisProvider
 import app.pursi.datasource.fi.FinnishChartProvider
@@ -29,7 +32,7 @@ import app.pursi.datasource.fi.FinnishWarningProvider
 import app.pursi.datasource.fi.FmiRadarCapabilities
 import app.pursi.datasource.fi.FmiRadarProvider
 import app.pursi.datasource.fi.FmiWeatherProvider
-//import app.pursi.datasource.global.EmodnetChartProvider
+import app.pursi.datasource.global.EmodnetDepthClient
 import app.pursi.datasource.global.RainViewerRadarProvider
 import app.pursi.datasource.global.RainViewerTimestampSource
 import app.pursi.datasource.global.RainViewerTimestampSourceImpl
@@ -85,11 +88,6 @@ object DataSourceModule {
 //    fun provideDanishChartProvider(): ChartProvider =
 //        DanishChartProvider()
 
-//    @Provides
-//    @IntoSet
-//    fun provideEmodnetChartProvider(): ChartProvider =
-//        EmodnetChartProvider()
-
     @Provides
     @IntoSet
     fun provideMetNorwayWarningProvider(client: OkHttpClient): WarningProvider =
@@ -119,6 +117,26 @@ object DataSourceModule {
     @IntoSet
     fun provideDigitrafficAisProvider(client: DigitrafficClient): AisProvider =
         DigitrafficAisProvider(client)
+
+    @Provides
+    @IntoSet
+    fun provideTraficomDepthProvider(dao: app.pursi.data.dao.WfsFeatureDao): DepthProvider =
+        TraficomDepthProvider(dao)
+
+    @Provides
+    @IntoSet
+    fun provideEmodnetDepthProvider(client: OkHttpClient): DepthProvider =
+        EmodnetDepthProvider(client)
+
+    @Provides
+    @Singleton
+    fun provideEmodnetDepthSampleDao(db: AppDatabase): app.pursi.data.dao.EmodnetDepthSampleDao =
+        db.emodnetDepthSampleDao()
+
+    @Provides
+    @Singleton
+    fun provideEmodnetDepthClient(client: OkHttpClient): EmodnetDepthClient =
+        EmodnetDepthClient(client)
 
     @Provides
     @Singleton
@@ -151,7 +169,8 @@ object DataSourceModule {
         warnings: Set<@JvmSuppressWildcards WarningProvider>,
         features: Set<@JvmSuppressWildcards MarineFeatureProvider>,
         radars: Set<@JvmSuppressWildcards RadarProvider> = emptySet(),
-        ais: Set<@JvmSuppressWildcards AisProvider> = emptySet()
+        ais: Set<@JvmSuppressWildcards AisProvider> = emptySet(),
+        depths: Set<@JvmSuppressWildcards DepthProvider> = emptySet()
     ): SourceResolver =
-        SourceResolver(charts, weather, warnings, features, radars, ais)
+        SourceResolver(charts, weather, warnings, features, radars, ais, depths)
 }
