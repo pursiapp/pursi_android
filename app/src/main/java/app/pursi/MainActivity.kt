@@ -1,10 +1,14 @@
 package app.pursi
 
 import android.Manifest
+import android.content.Context
 import android.content.Intent
+import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.os.PowerManager
+import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -34,10 +38,14 @@ class MainActivity : ComponentActivity() {
     @Inject lateinit var networkMonitor: NetworkMonitor
     @Inject lateinit var analyticsManager: AnalyticsManager
 
+    private lateinit var mapPrefs: SharedPreferences
+    private var keepScreenOnWakeLock: PowerManager.WakeLock? = null
+
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+        mapPrefs = getSharedPreferences("pursi_map", Context.MODE_PRIVATE)
         // Start weather/ais refresh loops at process lifetime (not Activity onStart)
         // so a brief background doesn't restart them from scratch. Loops are
         // suspended (not cancelled) on onStop via pause(); resumed on onStart.
@@ -59,6 +67,15 @@ class MainActivity : ComponentActivity() {
 
     override fun onStart() {
         super.onStart()
+        if (mapPrefs.getBoolean("keep_screen_on", false)) {
+            window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
+            @Suppress("DEPRECATION")
+            keepScreenOnWakeLock = pm.newWakeLock(
+                PowerManager.SCREEN_BRIGHT_WAKE_LOCK or PowerManager.ACQUIRE_CAUSES_WAKEUP,
+                "Pursi:KeepScreenOn"
+            ).apply { acquire() }
+        }
         ensureLocationServiceRunning()
         if (::weatherRepository.isInitialized) {
             weatherRepository.resume()
@@ -66,6 +83,9 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onStop() {
+        keepScreenOnWakeLock?.takeIf { it.isHeld }?.release()
+        keepScreenOnWakeLock = null
+        window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         if (::weatherRepository.isInitialized) {
             weatherRepository.pause()
         }

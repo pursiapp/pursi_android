@@ -2,7 +2,6 @@ package app.pursi.ui.screens
 
 import android.content.Context
 import android.location.Location
-import android.view.WindowManager
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -132,7 +131,6 @@ fun MapScreen(
     bottomInsetPx: androidx.compose.ui.unit.Dp = 0.dp,
     offlineMode: Boolean = false,
     tilesDirPath: String? = null,
-    keepScreenOn: Boolean = false,
     centerTarget: LatLng? = null,
     poiMarker: LatLng? = null,
     onClearPoiMarker: () -> Unit = {},
@@ -176,19 +174,8 @@ fun MapScreen(
     val temperatureC = nearestWind?.temperatureC
     val pressureHPa = nearestWind?.pressureHPa
 
-    val activity = context as? android.app.Activity
     val lastKnownBearing by mapViewModel.lastKnownBearing.collectAsStateWithLifecycle()
     var currentZoom by remember { mutableStateOf(initialCamZoom) }
-    DisposableEffect(keepScreenOn) {
-        if (keepScreenOn) {
-            activity?.window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        }
-        onDispose {
-            if (keepScreenOn) {
-                activity?.window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-            }
-        }
-    }
 
     var localPoiMarker by remember { mutableStateOf<LatLng?>(null) }
     var localCenterTarget by remember { mutableStateOf<LatLng?>(null) }
