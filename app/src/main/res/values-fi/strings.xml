@@ -45,10 +45,14 @@
     <string name="hour_forecast">24 tunnin ennuste tälle sijainnille</string>
     <string name="loading">Ladataan…</string>
     <string name="loading_forecast">Ladataan ennustetta…</string>
+    <string name="weather_unavailable">Säätiedot eivät saatavilla</string>
+    <string name="forecast_unavailable">Ennustetta ei saatavilla</string>
+    <string name="retry">Yritä uudelleen</string>
     <string name="coming_soon">Tulossa pian.</string>
     <string name="ms">m/s</string>
     <string name="no_warnings">Ei voimassa olevia varoituksia.</string>
     <string name="download">Lataa</string>
+    <string name="delete_region">Poista alue</string>
     <string name="night_mode">Yötila</string>
     <string name="night_mode_day">Päivätila</string>
     <string name="night_mode_night">Yötila</string>
@@ -345,6 +349,7 @@
     <string name="location_source_android">Android</string>
     <string name="location_source_google">Google Play</string>
     <string name="location_source_desc">Laitteen GPS-palvelu.</string>
+    <string name="location_privacy_note">Google Play: toimii sisätiloissa WiFin avulla, mutta lähettää sijaintitietoja Googlelle. Android: käyttää vain laitteen GPS:ää, ei lähetä Googlelle.</string>
 
     <string name="navmark_type">Tyyppi</string>
     <string name="navmark_status">Tila</string>

@@ -45,10 +45,14 @@
     <string name="hour_forecast">24 timmars prognos för denna plats</string>
     <string name="loading">Laddar…</string>
     <string name="loading_forecast">Laddar prognos…</string>
+    <string name="weather_unavailable">Väderdata inte tillgänglig</string>
+    <string name="forecast_unavailable">Prognos inte tillgänglig</string>
+    <string name="retry">Försök igen</string>
     <string name="coming_soon">Kommer snart.</string>
     <string name="ms">m/s</string>
     <string name="no_warnings">Inga gällande varningar.</string>
     <string name="download">Ladda ned</string>
+    <string name="delete_region">Ta bort region</string>
     <string name="night_mode">Nattläge</string>
     <string name="night_mode_day">Dagläge</string>
     <string name="night_mode_night">Nattläge</string>
@@ -345,6 +349,7 @@
     <string name="location_source_android">Android</string>
     <string name="location_source_google">Google Play</string>
     <string name="location_source_desc">Enhetens GPS-tjänst.</string>
+    <string name="location_privacy_note">Google Play: fungerar inomhus med Wi-Fi, men skickar platsdata till Google. Android: använder endast enhetens GPS, skickar inte till Google.</string>
 
     <string name="navmark_type">Typ</string>
     <string name="navmark_status">Status</string>
