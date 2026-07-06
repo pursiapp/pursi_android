@@ -267,7 +267,7 @@ class MapViewModel @Inject constructor(
             showWarnings = boolPref("showWarnings", false),
             showRadar = boolPref("showRadar", false),
             showAis = boolPref("showAis", false),
-            radarOpacity = savedStateHandle.get("radarOpacity") ?: 0.7f,
+            radarOpacity = 0.5f,
             chartOpacity = savedStateHandle.get<Float>("chartOpacity") ?: 1.0f,
             chartProviders = allChartProviders,
             lookAheadSec = savedStateHandle.get<Int>("lookAheadSec") ?: 5,
@@ -664,11 +664,6 @@ class MapViewModel @Inject constructor(
         val dLatMeters = (lat2 - lat1) * 111_320.0
         val dLngMeters = (lng2 - lng1) * 111_320.0 * kotlin.math.cos(meanLatRad)
         return dLngMeters to dLatMeters
-    }
-
-    fun setRadarOpacity(opacity: Float) {
-        _uiState.update { it.copy(radarOpacity = opacity) }
-        savedStateHandle["radarOpacity"] = opacity
     }
 
     fun setRadarTimeOffset(minutesAgo: Int) {

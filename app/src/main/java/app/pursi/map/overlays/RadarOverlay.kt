@@ -12,7 +12,7 @@ object RadarOverlay {
         style: Style,
         provider: RadarProvider,
         url: String,
-        opacity: Float = 0.7f,
+        opacity: Float = 0.5f,
         isHistory: Boolean = false
     ) {
         val srcId = "radar-${provider.providerId}"
@@ -25,8 +25,8 @@ object RadarOverlay {
         tileSet.attribution = provider.attribution
         tileSet.maxZoom = provider.maxZoom
         // Note: MapLibre 13.2.0 TileSet does not expose minimumTileUpdateInterval.
-        // Cache control is implicit via URL (new TIME = new cache key) and the
-        // source rebuild on every refresh tick clears any previous cache.
+        // Cache control is via the _pursi query param (unique per 5-min tick)
+        // and the source rebuild on every refresh tick clears any previous cache.
         style.addSource(RasterSource(srcId, tileSet, 256))
         val rasterLayer = RasterLayer(layerId, srcId)
         rasterLayer.setMinZoom(provider.minZoom)

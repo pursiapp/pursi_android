@@ -26,26 +26,36 @@ class FmiRadarProvider @Inject constructor(
 
     override suspend fun getRadarTileUrl(timeOffsetMinutes: Int): RadarTileUrl? = withContext(Dispatchers.IO) {
         val nowSec = System.currentTimeMillis() / 1000
+        // Cache-bust: MapLibre keys its native tile cache by URL. Keeping
+        // TIME=current means the URL would be byte-identical on every refresh
+        // tick and return stale tiles forever. Appending a 5-min-grid token
+        // makes the URL unique per published frame; FMI WMS ignores unknown
+        // query params, so the request still resolves to the actual latest frame.
+        val cacheBust = (nowSec / 300L).toString()
+
         if (timeOffsetMinutes == 0) {
             // Live: FMI's `current` resolves to the actual latest-published frame.
-            // No device-clock arithmetic → no "old rain" or "empty future" frames.
-            // Report a small but honest delay so the HUD reflects FMI's ~5-min publication lag.
             val latest = capabilities.latestAvailableEpochSec()
             val delay = if (latest != null) {
                 ((nowSec - latest).coerceAtLeast(0L) / 60L).toInt().coerceAtLeast(0)
             } else {
                 5
             }
-            return@withContext RadarTileUrl(buildWmsUrl("current"), effectiveDelayMinutes = delay)
+            return@withContext RadarTileUrl(
+                buildWmsUrl("current") + "&_pursi=$cacheBust",
+                effectiveDelayMinutes = delay
+            )
         }
 
         // History: request a frame at (latestAvailable - offset), floored to 5 min.
-        // History frames are immutable once published → safe; never requests the future.
         val latest = capabilities.latestAvailableEpochSec() ?: return@withContext null
         val targetSec = floorTo5Min(latest - (timeOffsetMinutes.toLong() * 60L))
         val delayMinutes = ((nowSec - targetSec) / 60L).toInt().coerceAtLeast(0)
         val iso = formatIso(targetSec * 1000L)
-        RadarTileUrl(buildWmsUrl(iso), effectiveDelayMinutes = delayMinutes)
+        RadarTileUrl(
+            buildWmsUrl(iso) + "&_pursi=$cacheBust",
+            effectiveDelayMinutes = delayMinutes
+        )
     }
 
     override fun refreshCache() {

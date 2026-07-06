@@ -21,7 +21,7 @@ data class MapUiState(
     val showLightning: Boolean = false,
     val showWarnings: Boolean = false,
     val showRadar: Boolean = false,
-    val radarOpacity: Float = 0.7f,
+    val radarOpacity: Float = 0.5f,
     val radarTimeOffset: Int = 0,
     val radarEffectiveDelay: Int = 0,
     val chartOpacity: Float = 1.0f,

@@ -124,7 +124,7 @@ fun PursiMapView(
     showWarnings: Boolean = false,
     showRadar: Boolean = false,
     radarTimeOffset: Int = 0,
-    radarOpacity: Float = 0.7f,
+    radarOpacity: Float = 0.5f,
     radarProvider: RadarProvider? = null,
     lightningStrikes: List<LightningStrike> = emptyList(),
     warnings: List<MarineWarning> = emptyList(),
