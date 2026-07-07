@@ -377,4 +377,5 @@
     <string name="wind_meter_size_small">Small</string>
     <string name="wind_meter_size_medium">Normal</string>
     <string name="wind_meter_size_large">Large</string>
+    <string name="split_view">Split view</string>
 </resources>

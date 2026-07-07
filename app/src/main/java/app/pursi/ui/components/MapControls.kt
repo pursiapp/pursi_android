@@ -8,8 +8,10 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.FiberManualRecord
@@ -18,6 +20,7 @@ import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Thunderstorm
+import androidx.compose.material.icons.filled.ViewColumn
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SmallFloatingActionButton
@@ -48,33 +51,37 @@ fun MapControls(
     windMeterSize: WeatherUnitPrefs.WindMeterSize,
     showWindMeter: Boolean,
     showRadar: Boolean,
+    splitMode: Boolean = false,
     onZoomIn: () -> Unit,
     onZoomOut: () -> Unit,
     onRecordToggle: () -> Unit,
     onLayersToggle: () -> Unit,
     onCenterLocation: () -> Unit,
     onRadarSliderToggle: () -> Unit,
+    onSplitToggle: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     Box(modifier = modifier.fillMaxSize()) {
-        // Right side: Zoom +/- buttons
-        Column(
-            modifier = Modifier
-                .align(Alignment.CenterEnd)
-                .padding(end = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            SmallFloatingActionButton(
-                onClick = onZoomIn,
-                containerColor = MaterialTheme.colorScheme.primaryContainer
+        // Right side: Zoom +/- buttons (hidden in split mode — per-pane controls in P3)
+        if (!splitMode) {
+            Column(
+                modifier = Modifier
+                    .align(Alignment.CenterEnd)
+                    .padding(end = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Icon(Icons.Default.Add, contentDescription = stringResource(R.string.zoom_in))
-            }
-            SmallFloatingActionButton(
-                onClick = onZoomOut,
-                containerColor = MaterialTheme.colorScheme.primaryContainer
-            ) {
-                Icon(Icons.Default.Remove, contentDescription = stringResource(R.string.zoom_out))
+                SmallFloatingActionButton(
+                    onClick = onZoomIn,
+                    containerColor = MaterialTheme.colorScheme.primaryContainer
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = stringResource(R.string.zoom_in))
+                }
+                SmallFloatingActionButton(
+                    onClick = onZoomOut,
+                    containerColor = MaterialTheme.colorScheme.primaryContainer
+                ) {
+                    Icon(Icons.Default.Remove, contentDescription = stringResource(R.string.zoom_out))
+                }
             }
         }
 
@@ -142,27 +149,107 @@ fun MapControls(
                            else MaterialTheme.colorScheme.error
                 )
             }
-            SmallFloatingActionButton(
-                onClick = onLayersToggle,
-                containerColor = if (showLayersPanel)
-                    MaterialTheme.colorScheme.tertiaryContainer
-                else
-                    MaterialTheme.colorScheme.primaryContainer
-            ) {
-                Icon(Icons.Default.Layers, contentDescription = stringResource(R.string.layers))
+            if (!splitMode) {
+                SmallFloatingActionButton(
+                    onClick = onLayersToggle,
+                    containerColor = if (showLayersPanel)
+                        MaterialTheme.colorScheme.tertiaryContainer
+                    else
+                        MaterialTheme.colorScheme.primaryContainer
+                ) {
+                    Icon(Icons.Default.Layers, contentDescription = stringResource(R.string.layers))
+                }
+            }
+            if (!splitMode) {
+                SmallFloatingActionButton(
+                    onClick = onCenterLocation,
+                    containerColor = if (followMode != FollowMode.OFF)
+                        MaterialTheme.colorScheme.primary
+                    else
+                        MaterialTheme.colorScheme.primaryContainer
+                ) {
+                    Icon(
+                        Icons.Default.MyLocation,
+                        contentDescription = stringResource(R.string.center_on_position),
+                        tint = if (followMode != FollowMode.OFF) MaterialTheme.colorScheme.onPrimary
+                               else MaterialTheme.colorScheme.onSurface
+                    )
+                }
             }
             SmallFloatingActionButton(
-                onClick = onCenterLocation,
-                containerColor = if (followMode != FollowMode.OFF)
+                onClick = onSplitToggle,
+                containerColor = if (splitMode)
                     MaterialTheme.colorScheme.primary
                 else
                     MaterialTheme.colorScheme.primaryContainer
             ) {
                 Icon(
+                    Icons.Default.ViewColumn,
+                    contentDescription = stringResource(R.string.split_view),
+                    tint = if (splitMode) MaterialTheme.colorScheme.onPrimary
+                           else MaterialTheme.colorScheme.onSurface
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun PaneControls(
+    paneBearing: Float,
+    onZoomIn: () -> Unit,
+    onZoomOut: () -> Unit,
+    onCenterLocation: () -> Unit,
+    onCompassClick: () -> Unit,
+    onLayersToggle: () -> Unit = {},
+    modifier: Modifier = Modifier,
+) {
+    Box(modifier = modifier) {
+        CompassRose(
+            mapBearing = paneBearing,
+            onClick = onCompassClick,
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(4.dp)
+                .size(40.dp)
+        )
+
+        Column(
+            modifier = Modifier
+                .align(Alignment.CenterEnd)
+                .padding(end = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            SmallFloatingActionButton(
+                onClick = onZoomIn,
+                modifier = Modifier.size(32.dp),
+                containerColor = MaterialTheme.colorScheme.primaryContainer
+            ) {
+                Icon(Icons.Default.Add, contentDescription = stringResource(R.string.zoom_in))
+            }
+            SmallFloatingActionButton(
+                onClick = onZoomOut,
+                modifier = Modifier.size(32.dp),
+                containerColor = MaterialTheme.colorScheme.primaryContainer
+            ) {
+                Icon(Icons.Default.Remove, contentDescription = stringResource(R.string.zoom_out))
+            }
+            SmallFloatingActionButton(
+                onClick = onLayersToggle,
+                modifier = Modifier.size(32.dp),
+                containerColor = MaterialTheme.colorScheme.primaryContainer
+            ) {
+                Icon(Icons.Default.Layers, contentDescription = stringResource(R.string.layers))
+            }
+            SmallFloatingActionButton(
+                onClick = onCenterLocation,
+                modifier = Modifier.size(32.dp),
+                containerColor = MaterialTheme.colorScheme.primaryContainer
+            ) {
+                Icon(
                     Icons.Default.MyLocation,
                     contentDescription = stringResource(R.string.center_on_position),
-                    tint = if (followMode != FollowMode.OFF) MaterialTheme.colorScheme.onPrimary
-                           else MaterialTheme.colorScheme.onSurface
+                    tint = MaterialTheme.colorScheme.onSurface
                 )
             }
         }

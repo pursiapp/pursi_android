@@ -62,6 +62,7 @@ import java.io.File
 import okhttp3.OkHttpClient
 import app.pursi.ui.viewmodel.BoatIconSize
 import app.pursi.ui.viewmodel.FollowMode
+import app.pursi.ui.viewmodel.MapPaneState
 import app.pursi.ui.viewmodel.NavmarkSize
 import app.pursi.ui.viewmodel.OrientationMode
 import app.pursi.weather.LightningStrike
@@ -80,6 +81,7 @@ import kotlin.time.Duration.Companion.milliseconds
 @Composable
 fun PursiMapView(
     modifier: Modifier = Modifier,
+    paneState: MapPaneState = MapPaneState(),
     chartOpacity: Float = 1.0f,
     offlineMode: Boolean = false,
     tilesDirPath: String? = null,
@@ -88,9 +90,6 @@ fun PursiMapView(
     location: LatLng? = null,
     bearingDeg: Float? = null,
     speedMps: Float = 0f,
-    centerTrigger: Int = 0,
-    zoomToBoatTrigger: Int = 0,
-    zoomToBoatLevel: Float = 7f,
     courseLineMinutes: List<Int> = emptyList(),
     recordingTrail: List<LatLng> = emptyList(),
     routeWaypoints: List<LatLng> = emptyList(),
@@ -99,9 +98,6 @@ fun PursiMapView(
     centerTarget: LatLng? = null,
     poiMarker: LatLng? = null,
     onClearPoiMarker: () -> Unit = {},
-    initialCamLat: Double = Double.NaN,
-    initialCamLon: Double = Double.NaN,
-    initialCamZoom: Double = 7.0,
     onCameraMoved: (Double, Double, Double) -> Unit = { _, _, _ -> },
     onMapReady: (MapLibreMap) -> Unit = {},
     onMapClick: (LatLng) -> Unit = {},
@@ -112,8 +108,6 @@ fun PursiMapView(
     onCameraIdle: (LatLng, LatLng) -> Unit = { _, _ -> },
     onUserPan: () -> Unit = {},
     onCameraBearingChanged: (Float) -> Unit = {},
-    followMode: FollowMode = FollowMode.CENTERED,
-    orientationMode: OrientationMode = OrientationMode.NORTH_UP,
     lastKnownBearing: Float? = null,
     lookAheadFactor: Float = 0.25f,
     lookAheadSec: Int = 5,
@@ -207,6 +201,7 @@ fun PursiMapView(
 
     DisposableEffect(Unit) {
         val handler = Handler(Looper.getMainLooper())
+        MapViewRegistry.register(mapView)
 
         val longClickListener = MapLibreMap.OnMapLongClickListener { latlng ->
             currentOnLongPress(LatLng(latlng.latitude, latlng.longitude))
@@ -379,10 +374,10 @@ fun PursiMapView(
             onMapReady(map)
 
             // Restore saved camera position
-            if (!initialCamLat.isNaN() && !initialCamLon.isNaN()) {
+            if (!paneState.initialCamLat.isNaN() && !paneState.initialCamLon.isNaN()) {
                 map.cameraPosition = CameraPosition.Builder()
-                    .target(LatLng(initialCamLat, initialCamLon))
-                    .zoom(initialCamZoom)
+                    .target(LatLng(paneState.initialCamLat, paneState.initialCamLon))
+                    .zoom(paneState.initialCamZoom)
                     .build()
             }
         }
@@ -403,17 +398,14 @@ fun PursiMapView(
             mapView.onPause()
             mapView.onStop()
             mapView.onDestroy()
+            MapViewRegistry.unregister(mapView)
+            TileServerManager.releaseSeamarkServer()
+            TileServerManager.releaseTraficomServer()
         }
     }
 
-    var tileServer by remember { mutableStateOf<SeamarkTileServer?>(null) }
-    var tileServerProxy by remember { mutableStateOf<TraficomTileServer?>(null) }
-    DisposableEffect(Unit) {
-        onDispose {
-            tileServer?.stopServer()
-            tileServerProxy?.stopServer()
-        }
-    }
+    var tileServerRef by remember { mutableStateOf<SeamarkTileServer?>(null) }
+    var tileServerProxyRef by remember { mutableStateOf<TraficomTileServer?>(null) }
 
     // Track last loaded state to avoid duplicate style loads and server restarts
     var lastStyleUri by remember { mutableStateOf<String?>(null) }
@@ -426,7 +418,6 @@ fun PursiMapView(
 
         if (lastServerConfig == null || seamarksDownloaded != lastServerConfig) {
             lastServerConfig = seamarksDownloaded
-            tileServer?.stopServer()
             val continentFiles = app.pursi.map.PmtilesDownloader.CONTINENTS
                 .map { java.io.File(context.filesDir, "seamarks_${it.id}.pmtiles") }
                 .filter { it.exists() }
@@ -434,24 +425,15 @@ fun PursiMapView(
             val allLocalFiles = listOfNotNull(
                 legacyFile.takeIf { it.exists() }
             ) + continentFiles
-            if (allLocalFiles.isNotEmpty()) {
-                val server = SeamarkTileServer(
-                    pmtilesFiles = allLocalFiles,
-                    port = 8080
-                )
-                if (withContext(Dispatchers.IO) { server.startServer() }) {
-                    tileServer = server
-                }
-            } else {
-                val server = SeamarkTileServer(
-                    pmtilesUrls = listOf(app.pursi.map.PmtilesDownloader.DEFAULT_SEAMARKS_URL),
-                    client = okhttp3.OkHttpClient(),
-                    port = 8080
-                )
-                if (withContext(Dispatchers.IO) { server.startServer() }) {
-                    tileServer = server
-                }
+            val pmtilesFiles = allLocalFiles
+            val pmtilesUrls = if (allLocalFiles.isEmpty()) {
+                listOf(app.pursi.map.PmtilesDownloader.DEFAULT_SEAMARKS_URL)
+            } else emptyList()
+            val client = if (pmtilesUrls.isNotEmpty()) okhttp3.OkHttpClient() else null
+            val server = withContext(Dispatchers.IO) {
+                TileServerManager.acquireSeamarkServer(pmtilesFiles, pmtilesUrls, client, context)
             }
+            tileServerRef = server
         }
 
         val styleUri = if (isNightMode) "asset://pursi_style_fjord.json" else "asset://pursi_style_vector.json"
@@ -524,7 +506,7 @@ fun PursiMapView(
         val map = currentMap.value as? MapLibreMap ?: return@LaunchedEffect
 
         val useProxyServer = !offlineMode && chartProviders.any { it.needsTileServer }
-        val localTileServerProxy = tileServerProxy
+        val localTileServerProxy = tileServerProxyRef
         if (useProxyServer && (localTileServerProxy == null || !localTileServerProxy.isRunning)) {
             val proxyProvider = chartProviders.first { it.needsTileServer }
             val fallbackLayers = proxyProvider.layers
@@ -533,17 +515,15 @@ fun PursiMapView(
                     val threshold = if (it.minZoom <= 4f) 0 else 3000
                     FallbackTileLayer(it.tileUrl, it.minZoom, threshold)
                 }
-            val server = TraficomTileServer(fallbackLayers, cacheDir = context.cacheDir)
-            if (server.startServer()) {
-                tileServerProxy = server
-            }
+            val server = TileServerManager.acquireTraficomServer(fallbackLayers, context.cacheDir)
+            tileServerProxyRef = server
         }
 
         map.getStyle { style ->
             ChartOverlay.updateLayers(
                 style, chartProviders, allRegisteredProviders,
                 offlineMode, tilesDirPath, chartOpacity,
-                tileServerProxy?.baseTileUrl
+                tileServerProxyRef?.baseTileUrl
             )
         }
     }
@@ -566,10 +546,10 @@ fun PursiMapView(
         BoatOverlay.updateBoatAndCourse(style, p.latitude, p.longitude, bearingDeg, speedMps, courseLineMinutes)
     }
 
-    LaunchedEffect(mapReadyToken, centerTrigger) {
+    LaunchedEffect(mapReadyToken, paneState.centerTrigger) {
         val map = currentMap.value as? MapLibreMap ?: return@LaunchedEffect
         val pos = location ?: return@LaunchedEffect
-        if (centerTrigger > 0) {
+        if (paneState.centerTrigger > 0) {
             map.animateCamera(
                 CameraUpdateFactory.newLatLngZoom(pos, map.cameraPosition.zoom.coerceAtLeast(10.0)),
                 500
@@ -577,12 +557,12 @@ fun PursiMapView(
         }
     }
 
-    LaunchedEffect(mapReadyToken, zoomToBoatTrigger) {
+    LaunchedEffect(mapReadyToken, paneState.zoomToBoatTrigger) {
         val map = currentMap.value as? MapLibreMap ?: return@LaunchedEffect
         val pos = location ?: return@LaunchedEffect
-        if (zoomToBoatTrigger > 0) {
+        if (paneState.zoomToBoatTrigger > 0) {
             map.animateCamera(
-                CameraUpdateFactory.newLatLngZoom(pos, zoomToBoatLevel.toDouble().coerceIn(4.0, 18.0)),
+                CameraUpdateFactory.newLatLngZoom(pos, paneState.zoomToBoatLevel.toDouble().coerceIn(4.0, 18.0)),
                 150
             )
         }
@@ -608,13 +588,13 @@ fun PursiMapView(
 
     // Camera tracking (location only): animates target + zoom to follow the boat.
     // Decoupled from the orientation effect so the two animations don't fight.
-    LaunchedEffect(mapReadyToken, followMode) {
+    LaunchedEffect(mapReadyToken, paneState.followMode) {
         val map = currentMap.value as? MapLibreMap ?: return@LaunchedEffect
         snapshotFlow { obsLocation to obsSpeed }
             .sample(250.milliseconds)
             .collect { (pos, _) ->
                 val p = pos ?: return@collect
-                if (followMode == FollowMode.OFF) return@collect
+                if (paneState.followMode == FollowMode.OFF) return@collect
 
                 val offsetFactor = obsLookAheadFactor
                 val target = if (offsetFactor > 0f) {
@@ -637,7 +617,7 @@ fun PursiMapView(
 
     // Orientation: animates only the bearing. Runs even when followMode == OFF
     // so the user can change orientation while panned away.
-    LaunchedEffect(mapReadyToken, orientationMode) {
+    LaunchedEffect(mapReadyToken, paneState.orientationMode) {
         val map = currentMap.value as? MapLibreMap ?: return@LaunchedEffect
         snapshotFlow { obsBearing to obsLastKnownBearing }
             .sample(250.milliseconds)
@@ -645,7 +625,7 @@ fun PursiMapView(
                 val bearing: Float? = pair.first
                 val lastKnown: Float? = pair.second
                 val current = map.cameraPosition
-                val newBearing = when (orientationMode) {
+                val newBearing = when (paneState.orientationMode) {
                     OrientationMode.NORTH_UP -> 0.0
                     OrientationMode.COURSE_UP -> {
                         val b = bearing ?: lastKnown

@@ -17,6 +17,8 @@ enum class BoatIconSize(val multiplier: Float) {
     LARGE(1.5f)
 }
 
+enum class SplitOrientation { Vertical, Horizontal }
+
 data class MapUiState(
     val showLightning: Boolean = false,
     val showWarnings: Boolean = false,
@@ -46,7 +48,11 @@ data class MapUiState(
     val selectedAlgaeObservations: List<WaterObservation> = emptyList(),
     val sectorMode: SectorMode = SectorMode.NIGHT,
 
-    val fiState: FinnishMapState? = null
+    val fiState: FinnishMapState? = null,
+
+    val splitMode: Boolean = false,
+    val splitOrientation: SplitOrientation = SplitOrientation.Vertical,
+    val splitFraction: Float = 0.5f,
 )
 
 data class FinnishMapState(

@@ -34,6 +34,13 @@ class PursiApplication : Application() {
 
         registerActivityLifecycleCallbacks(AppLifecycleTracker(analyticsManager))
     }
+
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        if (level >= TRIM_MEMORY_RUNNING_LOW) {
+            app.pursi.map.MapViewRegistry.onLowMemory()
+        }
+    }
 }
 
 private class AppLifecycleTracker(

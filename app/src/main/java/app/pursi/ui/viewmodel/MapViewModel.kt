@@ -273,6 +273,13 @@ class MapViewModel @Inject constructor(
             lookAheadSec = savedStateHandle.get<Int>("lookAheadSec") ?: 5,
             followMode = savedStateHandle.get<FollowMode>("followMode") ?: FollowMode.CENTERED,
             orientationMode = savedStateHandle.get<OrientationMode>("orientationMode") ?: OrientationMode.COURSE_UP,
+            splitMode = boolPref("splitMode", false),
+            splitOrientation = try { SplitOrientation.valueOf(
+                savedStateHandle.get<String>("splitOrientation")
+                    ?: prefs.getString("split_orientation", SplitOrientation.Vertical.name)
+                    ?: SplitOrientation.Vertical.name
+            ) } catch (_: Exception) { SplitOrientation.Vertical },
+            splitFraction = savedStateHandle.get<Float>("splitFraction") ?: prefs.getFloat("split_fraction", 0.5f),
             seamarksDownloaded = java.io.File(context.filesDir, "seamarks.pmtiles").exists(),
             downloadedSeamarkContinents = app.pursi.map.PmtilesDownloader.CONTINENTS
                 .map { it.id }
@@ -747,6 +754,23 @@ class MapViewModel @Inject constructor(
         SectorMode.OFF -> false
         SectorMode.NIGHT -> isNightMode
         SectorMode.ALWAYS -> true
+    }
+
+    fun toggleSplitMode() {
+        val current = _uiState.value.splitMode
+        _uiState.update { it.copy(splitMode = !current) }
+        persistBoth("splitMode", !current)
+    }
+
+    fun setSplitOrientation(orientation: SplitOrientation) {
+        _uiState.update { it.copy(splitOrientation = orientation) }
+        savedStateHandle["splitOrientation"] = orientation.name
+        prefs.edit().putString("split_orientation", orientation.name).apply()
+    }
+
+    fun setSplitFraction(fraction: Float) {
+        _uiState.update { it.copy(splitFraction = fraction.coerceIn(0f, 1f)) }
+        savedStateHandle["splitFraction"] = fraction
     }
 
     fun setOrientationMode(mode: OrientationMode) {

@@ -376,4 +376,5 @@
     <string name="wind_meter_size_small">Liten</string>
     <string name="wind_meter_size_medium">Normal</string>
     <string name="wind_meter_size_large">Stor</string>
+    <string name="split_view">Dela vy</string>
 </resources>
