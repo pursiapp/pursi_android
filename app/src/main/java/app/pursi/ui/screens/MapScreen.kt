@@ -23,6 +23,8 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -606,6 +608,14 @@ fun MapScreen(
         )
 
         if (showLayersPanel) {
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null
+                    ) { showLayersPanel = false }
+            )
             LayersPanel(
                 chartOpacity = chartOpacity,
                 showRadar = uiState.showRadar,
@@ -812,16 +822,29 @@ fun MapScreen(
             modifier = Modifier.align(Alignment.TopStart)
         )
 
-        RadarTimeSlider(
-            showRadar = uiState.showRadar,
-            showSlider = showRadarSlider,
-            radarTimeOffset = uiState.radarTimeOffset,
-            effectiveDelay = uiState.radarEffectiveDelay,
-            onRadarTimeOffsetChange = { mapViewModel.setRadarTimeOffset(it) },
-            bottomInsetPx = bottomInsetPx,
-            maxHistoryMinutes = radarProvider?.maxHistoryMinutes ?: 60,
-            modifier = Modifier.align(Alignment.BottomCenter)
-        )
+        if (showRadarSlider) {
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null
+                    ) {
+                        showRadarSlider = false
+                        mapViewModel.setRadarTimeOffset(0)
+                    }
+            )
+            RadarTimeSlider(
+                showRadar = uiState.showRadar,
+                showSlider = true,
+                radarTimeOffset = uiState.radarTimeOffset,
+                effectiveDelay = uiState.radarEffectiveDelay,
+                onRadarTimeOffsetChange = { mapViewModel.setRadarTimeOffset(it) },
+                bottomInsetPx = bottomInsetPx,
+                maxHistoryMinutes = radarProvider?.maxHistoryMinutes ?: 60,
+                modifier = Modifier.align(Alignment.BottomCenter)
+            )
+        }
 
         if (showOnboarding) {
             val dismissOnboarding = {

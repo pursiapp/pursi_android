@@ -12,7 +12,7 @@ object RadarOverlay {
         style: Style,
         provider: RadarProvider,
         url: String,
-        opacity: Float = 0.5f,
+        opacity: Float = 0.4f,
         isHistory: Boolean = false
     ) {
         val srcId = "radar-${provider.providerId}"
@@ -34,7 +34,7 @@ object RadarOverlay {
             PropertyFactory.rasterOpacity(opacity),
             PropertyFactory.rasterResampling("linear")
         )
-        style.addLayerBelow(rasterLayer, "layer-seamark-bottom")
+        style.addLayerAbove(rasterLayer, "layer-seamark-bottom")
     }
 
     fun remove(style: Style) {

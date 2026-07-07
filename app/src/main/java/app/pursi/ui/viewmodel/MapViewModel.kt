@@ -267,7 +267,7 @@ class MapViewModel @Inject constructor(
             showWarnings = boolPref("showWarnings", false),
             showRadar = boolPref("showRadar", false),
             showAis = boolPref("showAis", false),
-            radarOpacity = 0.5f,
+            radarOpacity = 0.4f,
             chartOpacity = savedStateHandle.get<Float>("chartOpacity") ?: 1.0f,
             chartProviders = allChartProviders,
             lookAheadSec = savedStateHandle.get<Int>("lookAheadSec") ?: 5,

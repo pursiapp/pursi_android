@@ -76,8 +76,6 @@ import kotlinx.coroutines.withContext
 import org.maplibre.geojson.Polygon
 import kotlin.time.Duration.Companion.milliseconds
 
-private const val RADAR_OPACITY = 0.4f
-
 @OptIn(FlowPreview::class)
 @Composable
 fun PursiMapView(
@@ -124,7 +122,7 @@ fun PursiMapView(
     showWarnings: Boolean = false,
     showRadar: Boolean = false,
     radarTimeOffset: Int = 0,
-    radarOpacity: Float = 0.5f,
+    radarOpacity: Float = 0.4f,
     radarProvider: RadarProvider? = null,
     lightningStrikes: List<LightningStrike> = emptyList(),
     warnings: List<MarineWarning> = emptyList(),
