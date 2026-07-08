@@ -422,10 +422,11 @@ fun MapScreen(
             }
         }
 
-        val mapPaneParams: @Composable (MapPaneState, (Float) -> Unit) -> Unit = { paneState, camBearingCallback ->
+        val mapPaneParams: @Composable (MapPaneState, Boolean, (Float) -> Unit) -> Unit = { paneState, isSecondary, camBearingCallback ->
             PursiMapView(
                 modifier = Modifier.fillMaxSize(),
                 paneState = paneState,
+                isSecondary = isSecondary,
                 chartOpacity = paneState.paneLayerState.chartOpacity,
                 offlineMode = offlineMode,
                 tilesDirPath = tilesDirPath,
@@ -578,7 +579,8 @@ fun MapScreen(
                     initialCamLon = initialCamLon,
                     initialCamZoom = initialCamZoom,
                     paneLayerState = uiState.toPaneLayerState(),
-                )
+                ),
+                false
             ) { mapBearing = it }
         } else {
             val orientation = uiState.splitOrientation
@@ -613,7 +615,8 @@ fun MapScreen(
                                     initialCamLon = initialCamLon,
                                     initialCamZoom = initialCamZoom,
                                     paneLayerState = paneBLayerState,
-                                )
+                                ),
+                                true
                             ) { pane2Bearing = it }
                             PaneControls(
                                 paneBearing = pane2Bearing,
@@ -647,7 +650,8 @@ fun MapScreen(
                                     initialCamLon = initialCamLon,
                                     initialCamZoom = initialCamZoom,
                                     paneLayerState = paneALayerState,
-                                )
+                                ),
+                                false
                             ) { mapBearing = it }
                             PaneControls(
                                 paneBearing = mapBearing,
@@ -703,7 +707,8 @@ fun MapScreen(
                                     initialCamLon = initialCamLon,
                                     initialCamZoom = initialCamZoom,
                                     paneLayerState = paneALayerState,
-                                )
+                                ),
+                                false
                             ) { mapBearing = it }
                             PaneControls(
                                 paneBearing = mapBearing,
@@ -746,7 +751,8 @@ fun MapScreen(
                                     initialCamLon = initialCamLon,
                                     initialCamZoom = initialCamZoom,
                                     paneLayerState = paneBLayerState,
-                                )
+                                ),
+                                true
                             ) { pane2Bearing = it }
                             PaneControls(
                                 paneBearing = pane2Bearing,
@@ -789,7 +795,8 @@ fun MapScreen(
                                     initialCamLon = initialCamLon,
                                     initialCamZoom = initialCamZoom,
                                     paneLayerState = paneALayerState,
-                                )
+                                ),
+                                false
                             ) { mapBearing = it }
                             PaneControls(
                                 paneBearing = mapBearing,
@@ -832,7 +839,8 @@ fun MapScreen(
                                     initialCamLon = initialCamLon,
                                     initialCamZoom = initialCamZoom,
                                     paneLayerState = paneBLayerState,
-                                )
+                                ),
+                                true
                             ) { pane2Bearing = it }
                             PaneControls(
                                 paneBearing = pane2Bearing,
@@ -1203,6 +1211,11 @@ fun MapScreen(
             radarProviderId = radarProvider?.providerId ?: "null",
             radarTimeOffset = uiState.radarTimeOffset,
             showRadarSlider = showRadarSlider,
+            mapViewCount = app.pursi.map.MapViewRegistry.activeCount,
+            heapMb = (Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory()).toInt() / (1024 * 1024),
+            spriteCacheCount = app.pursi.map.SpriteCacheRegistry.trackedCount,
+            depthFeatureCount = uiState.depthFeatures.values.sumOf { it.size },
+            turvalaiteFeatureCount = uiState.fiState?.turvalaiteFeatures?.values?.sumOf { it.size } ?: 0,
             onMockGpsToggle = {
                 if (isMockLocation) {
                     mapViewModel.centerOnLocation()

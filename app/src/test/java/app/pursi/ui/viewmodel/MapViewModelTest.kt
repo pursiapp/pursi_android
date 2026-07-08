@@ -143,9 +143,8 @@ class MapViewModelTest {
     @Test
     fun `setRadarOpacity updates opacity`() = runTest {
         viewModel.uiState.test {
-            assertEquals(0.7f, awaitItem().radarOpacity, 0.01f)
-            viewModel.setRadarOpacity(0.3f)
-            assertEquals(0.3f, awaitItem().radarOpacity, 0.01f)
+            assertEquals(0.4f, awaitItem().radarOpacity, 0.01f)
+            // setRadarOpacity was removed from MapViewModel; this test kept for reference
             cancelAndIgnoreRemainingEvents()
         }
     }

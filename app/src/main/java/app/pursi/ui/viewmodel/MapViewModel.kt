@@ -16,6 +16,7 @@ import app.pursi.data.dao.TrackSummaryDao
 import app.pursi.data.dao.WfsFeatureDao
 import app.pursi.data.model.EmodnetDepthSample
 import app.pursi.data.model.WfsFeature
+import app.pursi.datasource.core.BoundingBox
 import app.pursi.datasource.core.ChartProvider
 import app.pursi.datasource.core.FeatureRendererRegistry
 import app.pursi.datasource.core.SourceResolver
@@ -84,6 +85,11 @@ class MapViewModel @Inject constructor(
     private var hasBounds = false
     private var lastCameraLat = Double.NaN
     private var lastCameraLon = Double.NaN
+    private var prevFetchMinLat = Double.NaN
+    private var prevFetchMinLng = Double.NaN
+    private var prevFetchMaxLat = Double.NaN
+    private var prevFetchMaxLng = Double.NaN
+    private var prevFetchZoom = 0.0
     private var depthFetchJob: kotlinx.coroutines.Job? = null
     private var turvalaiteFetchJob: kotlinx.coroutines.Job? = null
     private var turvalaitevikaFetchJob: kotlinx.coroutines.Job? = null
@@ -361,15 +367,66 @@ class MapViewModel @Inject constructor(
         lastBoundsZoom = zoom
         hasBounds = true
         aisRepository.setQueryBounds(minLat, minLng, maxLat, maxLng)
-        if (_uiState.value.showDepth) {
-            fetchDepthFeatures(minLat, minLng, maxLat, maxLng, zoom)
-            fetchEmodnetDepthFeatures(minLat, minLng, maxLat, maxLng, zoom)
+        pruneOutOfViewFeatures(minLat, minLng, maxLat, maxLng)
+        if (boundsChangedSignificantly(minLat, minLng, maxLat, maxLng, zoom)) {
+            prevFetchMinLat = minLat
+            prevFetchMinLng = minLng
+            prevFetchMaxLat = maxLat
+            prevFetchMaxLng = maxLng
+            prevFetchZoom = zoom
+            if (_uiState.value.showDepth) {
+                fetchDepthFeatures(minLat, minLng, maxLat, maxLng, zoom)
+                fetchEmodnetDepthFeatures(minLat, minLng, maxLat, maxLng, zoom)
+            }
+            if (fiState.showVvNavmarks) {
+                fetchTurvalaitteet(minLat, minLng, maxLat, maxLng, zoom)
+            }
+            if (fiState.showTurvalaiteviat) {
+                fetchTurvalaiteviat(minLat, minLng, maxLat, maxLng, zoom)
+            }
         }
-        if (fiState.showVvNavmarks) {
-            fetchTurvalaitteet(minLat, minLng, maxLat, maxLng, zoom)
+    }
+
+    private fun boundsChangedSignificantly(
+        minLat: Double, minLng: Double, maxLat: Double, maxLng: Double, zoom: Double
+    ): Boolean {
+        if (prevFetchMinLat.isNaN()) return true
+        val tol = 0.01
+        val zoomTol = 0.5
+        return kotlin.math.abs(minLat - prevFetchMinLat) > tol ||
+            kotlin.math.abs(minLng - prevFetchMinLng) > tol ||
+            kotlin.math.abs(maxLat - prevFetchMaxLat) > tol ||
+            kotlin.math.abs(maxLng - prevFetchMaxLng) > tol ||
+            kotlin.math.abs(zoom - prevFetchZoom) > zoomTol
+    }
+
+    private fun pruneOutOfViewFeatures(minLat: Double, minLng: Double, maxLat: Double, maxLng: Double) {
+        val viewport = BoundingBox(minLat, maxLat, minLng, maxLng).expanded(1.5)
+        _uiState.update { state ->
+            val prunedDepth = pruneMap(state.depthFeatures, viewport)
+            val fi = state.fiState ?: return@update state
+            val trimmedFi = fi.copy(
+                turvalaiteFeatures = pruneMap(fi.turvalaiteFeatures, viewport),
+                valosektoriFeatures = pruneMap(fi.valosektoriFeatures, viewport),
+                vesiliikennemerkkiFeatures = pruneMap(fi.vesiliikennemerkkiFeatures, viewport),
+                navlineFeatures = pruneMap(fi.navlineFeatures, viewport),
+                fairwayFeatures = pruneMap(fi.fairwayFeatures, viewport),
+                turvalaitevikaFeatures = pruneMap(fi.turvalaitevikaFeatures, viewport),
+            )
+            state.copy(depthFeatures = prunedDepth, fiState = trimmedFi)
         }
-        if (fiState.showTurvalaiteviat) {
-            fetchTurvalaiteviat(minLat, minLng, maxLat, maxLng, zoom)
+    }
+
+    private fun pruneMap(
+        features: Map<String, List<app.pursi.data.model.WfsFeature>>,
+        viewport: BoundingBox
+    ): Map<String, List<app.pursi.data.model.WfsFeature>> {
+        if (features.isEmpty()) return features
+        return features.mapValues { (_, list) ->
+            list.filter { wfs ->
+                val featBox = BoundingBox(wfs.minLat, wfs.maxLat, wfs.minLng, wfs.maxLng)
+                featBox.intersects(viewport)
+            }
         }
     }
 

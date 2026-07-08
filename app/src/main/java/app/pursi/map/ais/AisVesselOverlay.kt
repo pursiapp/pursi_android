@@ -6,6 +6,7 @@ import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Path
 import app.pursi.ais.AisVessel
+import app.pursi.map.SpriteCacheRegistry
 import org.maplibre.android.maps.Style
 import org.maplibre.android.style.expressions.Expression
 import org.maplibre.android.style.layers.PropertyFactory
@@ -47,7 +48,11 @@ object AisVesselOverlay {
         val ns = Expression.get("navStat")
 
         fun add(id: String, icon: String, color: String, shape: (Canvas, Paint, Paint) -> Unit, filter: Expression) {
-            if (style.getImage(icon) == null) style.addImage(icon, mkIcon(color, shape))
+            if (style.getImage(icon) == null) {
+                val bmp = mkIcon(color, shape)
+                SpriteCacheRegistry.track(bmp, "ais-icon")
+                style.addImage(icon, bmp)
+            }
             SymbolLayer(id, SRC).apply {
                 setProperties(
                     PropertyFactory.iconImage(icon),

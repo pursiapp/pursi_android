@@ -5,6 +5,7 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Path
+import app.pursi.map.SpriteCacheRegistry
 import app.pursi.ui.viewmodel.BoatIconSize
 import org.maplibre.android.maps.Style
 import org.maplibre.android.style.expressions.Expression
@@ -27,6 +28,7 @@ object BoatOverlay {
         try { if (style.getSource(BOAT_SOURCE) != null) return } catch (_: IllegalStateException) { return }
 
         val boatBitmap = createBoatIcon(boatIconColor)
+        SpriteCacheRegistry.track(boatBitmap, "boat-icon")
         style.addImage(BOAT_ICON, boatBitmap)
 
         val source = GeoJsonSource(BOAT_SOURCE)
@@ -65,7 +67,9 @@ object BoatOverlay {
     fun refreshProperties(style: Style, boatIconSize: BoatIconSize, boatIconColor: String) {
         val layer = style.getLayer(BOAT_LAYER) as? SymbolLayer ?: return
 
+        SpriteCacheRegistry.recycleByLabel("boat-icon")
         val newBitmap = createBoatIcon(boatIconColor)
+        SpriteCacheRegistry.track(newBitmap, "boat-icon")
         style.addImage(BOAT_ICON, newBitmap)
 
         val expr = Expression.interpolate(Expression.linear(), Expression.zoom(),

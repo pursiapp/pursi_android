@@ -37,9 +37,7 @@ class PursiApplication : Application() {
 
     override fun onTrimMemory(level: Int) {
         super.onTrimMemory(level)
-        if (level >= TRIM_MEMORY_RUNNING_LOW) {
-            app.pursi.map.MapViewRegistry.onLowMemory()
-        }
+        app.pursi.map.MapViewRegistry.onTrimMemory(level)
     }
 }
 

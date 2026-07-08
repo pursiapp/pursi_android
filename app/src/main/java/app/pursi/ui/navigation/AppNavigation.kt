@@ -166,11 +166,20 @@ fun AppNavigation(
         downloadManager.loadJobs()
     }
 
+    val camSaveHandler = remember { android.os.Handler(android.os.Looper.getMainLooper()) }
+    val camSaveRunnable = remember {
+        Runnable {
+            mapPrefs.edit()
+                .putFloat("cam_lat", savedCamLat.toFloat())
+                .putFloat("cam_lon", savedCamLon.toFloat())
+                .putFloat("cam_zoom", savedCamZoom.toFloat())
+                .apply()
+        }
+    }
     val onCameraMoved: (Double, Double, Double) -> Unit = { lat, lon, zoom ->
         savedCamLat = lat; savedCamLon = lon; savedCamZoom = zoom
-        mapPrefs.edit().putFloat("cam_lat", lat.toFloat())
-            .putFloat("cam_lon", lon.toFloat())
-            .putFloat("cam_zoom", zoom.toFloat()).apply()
+        camSaveHandler.removeCallbacks(camSaveRunnable)
+        camSaveHandler.postDelayed(camSaveRunnable, 500L)
     }
 
     PursiTheme(darkTheme = isNightMode) {

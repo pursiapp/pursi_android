@@ -34,6 +34,11 @@ fun DebugOverlay(
     radarProviderId: String = "-",
     radarTimeOffset: Int = 0,
     showRadarSlider: Boolean = false,
+    mapViewCount: Int = 0,
+    heapMb: Int = 0,
+    spriteCacheCount: Int = 0,
+    depthFeatureCount: Int = 0,
+    turvalaiteFeatureCount: Int = 0,
     modifier: Modifier = Modifier
 ) {
     if (showDebug) {
@@ -50,6 +55,7 @@ fun DebugOverlay(
                 Text("Depth: ${if (showDepth) "ON" else "OFF"}", style = MaterialTheme.typography.bodySmall)
                 Text("Radar: ${if (showRadar) "ON" else "OFF"}  prov=$radarProviderId  off=$radarTimeOffset  slider=$showRadarSlider", style = MaterialTheme.typography.bodySmall)
                 Text("VV: ${if (vvStatus.downloaded) "OFFLINE" else if (vvStatus.usingNetwork) "NETWORK" else "CACHE"} | T:${vvStatus.turvalaiteCount} L:${vvStatus.valosektoriCount} N:${vvStatus.navlineCount}", style = MaterialTheme.typography.bodySmall)
+                Text("Mem: ${heapMb}MB | Maps:$mapViewCount | Sprites:$spriteCacheCount | DepthFeat:$depthFeatureCount | TurvFeat:$turvalaiteFeatureCount", style = MaterialTheme.typography.bodySmall)
                 Spacer(Modifier.height(4.dp))
                 Button(
                     onClick = onMockGpsToggle,

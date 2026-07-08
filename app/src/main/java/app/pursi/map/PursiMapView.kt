@@ -27,6 +27,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import org.maplibre.android.MapLibre
 import org.maplibre.android.maps.MapView
 import org.maplibre.android.maps.MapLibreMap
+import org.maplibre.android.maps.MapLibreMapOptions
 import org.maplibre.android.maps.Style
 import org.maplibre.android.geometry.LatLng
 import org.maplibre.android.camera.CameraPosition
@@ -82,6 +83,7 @@ import kotlin.time.Duration.Companion.milliseconds
 fun PursiMapView(
     modifier: Modifier = Modifier,
     paneState: MapPaneState = MapPaneState(),
+    isSecondary: Boolean = false,
     chartOpacity: Float = 1.0f,
     offlineMode: Boolean = false,
     tilesDirPath: String? = null,
@@ -148,12 +150,21 @@ fun PursiMapView(
     viewportBounds: BoundingBox? = null
 ) {
     val context = LocalContext.current
-    val mapView = remember {
+    val mapView = remember(isSecondary) {
         MapLibre.getInstance(context)
-        MapView(context).apply {
+        val options = MapLibreMapOptions().apply {
+            textureMode(true)
+            setPrefetchesTiles(!isSecondary)
+            setPrefetchZoomDelta(if (isSecondary) 0 else 2)
+            if (isSecondary) {
+                pixelRatio((context.resources.displayMetrics.density * 0.75f).coerceAtMost(1.5f))
+            }
+        }
+        MapView(context, options).apply {
             onCreate(null)
             onStart()
             onResume()
+            setMaximumFps(if (isSecondary) 30 else 60)
         }
     }
 
@@ -192,7 +203,7 @@ fun PursiMapView(
     var radarRetryTick by remember { mutableStateOf(0) }
     var radarEffectToken by remember { mutableIntStateOf(0) }
     LaunchedEffect(mapReadyToken, showRadar) {
-        if (!showRadar) return@LaunchedEffect
+        if (!showRadar || isSecondary) return@LaunchedEffect
         while (true) {
             kotlinx.coroutines.delay(300_000L)
             radarRefreshTick++
@@ -250,7 +261,7 @@ fun PursiMapView(
             var algaeObsClickListener: MapLibreMap.OnMapClickListener? = null
 
         mapView.getMapAsync { map ->
-            configureMap(map, context, chartOpacity)
+            configureMap(map, context, isSecondary, chartOpacity)
             currentMap.value = map
 
             // Two-finger distance measurement
@@ -446,12 +457,18 @@ fun PursiMapView(
                     val sfname = if (dm >= 2.0f) "seamark_sprites@2x" else "seamark_sprites"
                     val jsobj = org.json.JSONObject(context.assets.open("$sfname.json").bufferedReader().readText())
                     val bmp = android.graphics.BitmapFactory.decodeStream(context.assets.open("$sfname.png"))
-                    val names = jsobj.names()
-                    for (i in 0 until names.length()) {
-                        val n = names.getString(i)
-                        val e = jsobj.getJSONObject(n)
-                        val icon = android.graphics.Bitmap.createBitmap(bmp, e.getInt("x"), e.getInt("y"), e.getInt("width"), e.getInt("height"))
-                        if (style.getImage(n) == null) style.addImage(n, icon)
+                    SpriteCacheRegistry.recycleByLabel("seamark-sprite")
+                    try {
+                        val names = jsobj.names()
+                        for (i in 0 until names.length()) {
+                            val n = names.getString(i)
+                            val e = jsobj.getJSONObject(n)
+                            val icon = android.graphics.Bitmap.createBitmap(bmp, e.getInt("x"), e.getInt("y"), e.getInt("width"), e.getInt("height"))
+                            SpriteCacheRegistry.track(icon, "seamark-sprite")
+                            if (style.getImage(n) == null) style.addImage(n, icon)
+                        }
+                    } finally {
+                        bmp.recycle()
                     }
                 } catch (ex: Exception) {
                     android.util.Log.e("PursiMap", "Seamark sprite error: ${ex.message}")
@@ -480,9 +497,11 @@ fun PursiMapView(
         }
     }
 
-    // Periodic tile retry — every 5 seconds to retry failed tiles (both raster & vector)
-    LaunchedEffect(currentMap.value) {
+    // Periodic tile retry — every 5 seconds to retry failed tiles (both raster & vector).
+    // Skip on the secondary pane because its tile cache is disabled.
+    LaunchedEffect(currentMap.value, isSecondary) {
         val map = currentMap.value ?: return@LaunchedEffect
+        if (isSecondary) return@LaunchedEffect
         while (true) {
             kotlinx.coroutines.delay(5_000L)
             map.triggerRepaint()
@@ -828,7 +847,7 @@ fun PursiMapView(
 
 
 
-private fun configureMap(map: MapLibreMap, context: Context, initialChartOpacity: Float = 1.0f) {
+private fun configureMap(map: MapLibreMap, context: Context, isSecondary: Boolean = false, initialChartOpacity: Float = 1.0f) {
     map.setMinZoomPreference(4.0)
     map.setMaxZoomPreference(18.0)
 
@@ -837,6 +856,10 @@ private fun configureMap(map: MapLibreMap, context: Context, initialChartOpacity
     map.uiSettings.isRotateGesturesEnabled = true
     map.uiSettings.isTiltGesturesEnabled = true
     map.uiSettings.isCompassEnabled = false
+
+    map.setTileCacheEnabled(!isSecondary)
+    map.setPrefetchesTiles(!isSecondary)
+    map.setPrefetchZoomDelta(if (isSecondary) 0 else 2)
 
     val cameraPosition = CameraPosition.Builder()
         .target(LatLng(60.0, 23.0))
@@ -847,6 +870,7 @@ private fun configureMap(map: MapLibreMap, context: Context, initialChartOpacity
 
 private fun Style.registerNavmarkIcons(context: android.content.Context, isNightMode: Boolean = false) {
     val dir = if (isNightMode) "navmarks-night" else "navmarks"
+    SpriteCacheRegistry.recycleByLabel("navmark-icon")
     val names = listOf(
         "bc_north", "bc_east", "bc_south", "bc_west",
         "bc_bcn_north", "bc_bcn_east", "bc_bcn_south", "bc_bcn_west",
@@ -887,6 +911,7 @@ private fun Style.registerNavmarkIcons(context: android.content.Context, isNight
         val bmp = loadIcon(context, "$dir/$name.png")
             ?: if (isNightMode) loadIcon(context, "navmarks/$name.png") else null
         if (bmp != null && getImage(name) == null) {
+            SpriteCacheRegistry.track(bmp, "navmark-icon")
             addImage(name, bmp)
             loaded++
         }
@@ -906,24 +931,31 @@ private fun Style.loadOfmSprite(context: android.content.Context) {
         val sfname = if (dm >= 2.0f) "ofm@2x" else "ofm"
         val jsobj = org.json.JSONObject(context.assets.open("ofm_sprite/$sfname.json").bufferedReader().readText())
         val bmp = android.graphics.BitmapFactory.decodeStream(context.assets.open("ofm_sprite/$sfname.png"))
-        val names = jsobj.names()
-        var count = 0
-        for (i in 0 until names.length()) {
-            val n = names.getString(i)
-            if (getImage(n) == null) {
-                val e = jsobj.getJSONObject(n)
-                val icon = android.graphics.Bitmap.createBitmap(bmp, e.getInt("x"), e.getInt("y"), e.getInt("width"), e.getInt("height"))
-                addImage(n, icon)
-                count++
+        SpriteCacheRegistry.recycleByLabel("ofm-sprite")
+        try {
+            val names = jsobj.names()
+            var count = 0
+            for (i in 0 until names.length()) {
+                val n = names.getString(i)
+                if (getImage(n) == null) {
+                    val e = jsobj.getJSONObject(n)
+                    val icon = android.graphics.Bitmap.createBitmap(bmp, e.getInt("x"), e.getInt("y"), e.getInt("width"), e.getInt("height"))
+                    SpriteCacheRegistry.track(icon, "ofm-sprite")
+                    addImage(n, icon)
+                    count++
+                }
             }
+            android.util.Log.d("PursiMap", "Loaded $count ofm sprite icons")
+        } finally {
+            bmp.recycle()
         }
-        android.util.Log.d("PursiMap", "Loaded $count ofm sprite icons")
     } catch (ex: Exception) {
         android.util.Log.e("PursiMap", "OFM sprite error: ${ex.message}")
     }
 }
 
 private fun Style.loadPoiIcons(context: android.content.Context) {
+    SpriteCacheRegistry.recycleByLabel("poi-icon")
     val names = listOf(
         "sauna", "bbq", "bench", "shower", "firepit", "campfire",
         "viewpoint", "information", "lightning"
@@ -935,6 +967,7 @@ private fun Style.loadPoiIcons(context: android.content.Context) {
                 context.assets.open("poi_icons/$name.png")
             )
             if (bmp != null && getImage(name) == null) {
+                SpriteCacheRegistry.track(bmp, "poi-icon")
                 addImage(name, bmp)
                 loaded++
             }
