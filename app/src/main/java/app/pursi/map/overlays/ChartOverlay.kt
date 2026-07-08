@@ -14,6 +14,16 @@ object ChartOverlay {
     private const val OPENSEAMAP_SUBDIR = "openseamap"
     private const val OPENSEAMAP_MINZOOM = 4f
 
+    private val WFS_SEAMARK_LAYER_PREFIXES = listOf(
+        "layer-wfs-aton", "layer-wfs-aton-fault",
+        "layer-wfs-light-sector", "layer-wfs-notice",
+        "layer-wfs-navline", "layer-wfs-fairway"
+    )
+
+    private fun isWfsSeamarkLayer(id: String): Boolean {
+        return WFS_SEAMARK_LAYER_PREFIXES.any { id == it || id.startsWith("$it-") }
+    }
+
     fun updateLayers(
         style: Style,
         chartProviders: List<ChartProvider>,
@@ -179,17 +189,17 @@ object ChartOverlay {
     }
 
     fun updateSeamarkVisibility(style: Style, seamarkLayerIds: List<String>, chartOpacity: Float) {
-        // The OSM seamark layers (DYNAMIC_icon_*) and WFS layers are no longer
-        // toggled by chart opacity; they are always visible unless a VV feature
-        // overrides them via setDynamicIconVisibility. This function now only
-        // toggles the seamark raster fallback layers that are passed via
-        // seamarkLayerIds, if any caller still needs that.
         val shouldHide = chartOpacity > 0.85f
         val v = if (shouldHide) Property.NONE else Property.VISIBLE
         for (id in seamarkLayerIds) {
             style.getLayer(id)?.setProperties(
                 PropertyFactory.visibility(v)
             )
+        }
+        for (layer in style.layers) {
+            if (isWfsSeamarkLayer(layer.id)) {
+                layer.setProperties(PropertyFactory.visibility(v))
+            }
         }
     }
 
@@ -208,9 +218,10 @@ object ChartOverlay {
     internal fun setDynamicIconVisibility(
         style: Style,
         hideForTurvalaite: Boolean,
-        hideForNotice: Boolean
+        hideForNotice: Boolean,
+        chartOpacity: Float
     ) {
-        val hide = hideForTurvalaite || hideForNotice
+        val hide = hideForTurvalaite || hideForNotice || chartOpacity > 0.85f
         val visibility = if (hide) Property.NONE else Property.VISIBLE
         for (layerId in listOf("DYNAMIC_icon_fixed_rotation", "DYNAMIC_icon_free_rotation")) {
             style.getLayer(layerId)?.setProperties(

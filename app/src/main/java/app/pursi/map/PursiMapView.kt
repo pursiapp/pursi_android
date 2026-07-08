@@ -821,7 +821,8 @@ fun PursiMapView(
             ChartOverlay.setDynamicIconVisibility(
                 style = style,
                 hideForTurvalaite = hideForTurvalaite,
-                hideForNotice = hideForNotice
+                hideForNotice = hideForNotice,
+                chartOpacity = chartOpacity
             )
         }
     }
