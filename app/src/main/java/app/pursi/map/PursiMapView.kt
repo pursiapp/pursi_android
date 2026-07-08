@@ -27,7 +27,6 @@ import androidx.compose.ui.viewinterop.AndroidView
 import org.maplibre.android.MapLibre
 import org.maplibre.android.maps.MapView
 import org.maplibre.android.maps.MapLibreMap
-import org.maplibre.android.maps.MapLibreMapOptions
 import org.maplibre.android.maps.Style
 import org.maplibre.android.geometry.LatLng
 import org.maplibre.android.camera.CameraPosition
@@ -48,6 +47,7 @@ import org.maplibre.geojson.Point
 import org.maplibre.geojson.LineString
 import app.pursi.datasource.core.BoundingBox
 import app.pursi.datasource.core.ChartProvider
+import app.pursi.map.SpriteCacheRegistry
 import app.pursi.datasource.core.RadarProvider
 import app.pursi.ais.AisVessel
 import app.pursi.map.ais.AisVesselOverlay
@@ -83,7 +83,6 @@ import kotlin.time.Duration.Companion.milliseconds
 fun PursiMapView(
     modifier: Modifier = Modifier,
     paneState: MapPaneState = MapPaneState(),
-    isSecondary: Boolean = false,
     chartOpacity: Float = 1.0f,
     offlineMode: Boolean = false,
     tilesDirPath: String? = null,
@@ -150,21 +149,12 @@ fun PursiMapView(
     viewportBounds: BoundingBox? = null
 ) {
     val context = LocalContext.current
-    val mapView = remember(isSecondary) {
+    val mapView = remember {
         MapLibre.getInstance(context)
-        val options = MapLibreMapOptions().apply {
-            textureMode(true)
-            setPrefetchesTiles(!isSecondary)
-            setPrefetchZoomDelta(if (isSecondary) 0 else 2)
-            if (isSecondary) {
-                pixelRatio((context.resources.displayMetrics.density * 0.75f).coerceAtMost(1.5f))
-            }
-        }
-        MapView(context, options).apply {
+        MapView(context).apply {
             onCreate(null)
             onStart()
             onResume()
-            setMaximumFps(if (isSecondary) 30 else 60)
         }
     }
 
@@ -203,7 +193,7 @@ fun PursiMapView(
     var radarRetryTick by remember { mutableStateOf(0) }
     var radarEffectToken by remember { mutableIntStateOf(0) }
     LaunchedEffect(mapReadyToken, showRadar) {
-        if (!showRadar || isSecondary) return@LaunchedEffect
+        if (!showRadar) return@LaunchedEffect
         while (true) {
             kotlinx.coroutines.delay(300_000L)
             radarRefreshTick++
@@ -261,7 +251,7 @@ fun PursiMapView(
             var algaeObsClickListener: MapLibreMap.OnMapClickListener? = null
 
         mapView.getMapAsync { map ->
-            configureMap(map, context, isSecondary, chartOpacity)
+            configureMap(map, context, chartOpacity)
             currentMap.value = map
 
             // Two-finger distance measurement
@@ -497,11 +487,9 @@ fun PursiMapView(
         }
     }
 
-    // Periodic tile retry — every 5 seconds to retry failed tiles (both raster & vector).
-    // Skip on the secondary pane because its tile cache is disabled.
-    LaunchedEffect(currentMap.value, isSecondary) {
+    // Periodic tile retry — every 5 seconds to retry failed tiles (both raster & vector)
+    LaunchedEffect(currentMap.value) {
         val map = currentMap.value ?: return@LaunchedEffect
-        if (isSecondary) return@LaunchedEffect
         while (true) {
             kotlinx.coroutines.delay(5_000L)
             map.triggerRepaint()
@@ -847,7 +835,7 @@ fun PursiMapView(
 
 
 
-private fun configureMap(map: MapLibreMap, context: Context, isSecondary: Boolean = false, initialChartOpacity: Float = 1.0f) {
+private fun configureMap(map: MapLibreMap, context: Context, initialChartOpacity: Float = 1.0f) {
     map.setMinZoomPreference(4.0)
     map.setMaxZoomPreference(18.0)
 
@@ -856,10 +844,6 @@ private fun configureMap(map: MapLibreMap, context: Context, isSecondary: Boolea
     map.uiSettings.isRotateGesturesEnabled = true
     map.uiSettings.isTiltGesturesEnabled = true
     map.uiSettings.isCompassEnabled = false
-
-    map.setTileCacheEnabled(!isSecondary)
-    map.setPrefetchesTiles(!isSecondary)
-    map.setPrefetchZoomDelta(if (isSecondary) 0 else 2)
 
     val cameraPosition = CameraPosition.Builder()
         .target(LatLng(60.0, 23.0))
