@@ -32,7 +32,7 @@ android {
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "app.pursi.beta"
+        applicationId = "app.pursi"
         minSdk = 24
         targetSdk = 35
         versionCode = 4
