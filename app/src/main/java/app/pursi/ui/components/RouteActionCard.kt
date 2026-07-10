@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Navigation
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Undo
 import androidx.compose.material3.Card
@@ -30,6 +31,7 @@ import androidx.compose.ui.unit.dp
 import app.pursi.data.model.Boat
 import app.pursi.navigation.RoutePlanner
 import app.pursi.location.SpeedCalculator
+import app.pursi.ui.viewmodel.NavigationState
 import org.maplibre.android.geometry.LatLng
 import app.pursi.R
 
@@ -45,7 +47,11 @@ fun RouteActionCard(
     onUndo: () -> Unit,
     onClear: () -> Unit,
     onSave: () -> Unit,
-    onClose: () -> Unit
+    onClose: () -> Unit,
+    navigationState: NavigationState = NavigationState(),
+    onStartNavigate: () -> Unit = {},
+    onStopNavigate: () -> Unit = {},
+    onNavigateWaypoint: (Int) -> Unit = {}
 ) {
     val distNm = if (waypoints.size >= 2) {
         var d = 0.0
@@ -96,12 +102,24 @@ fun RouteActionCard(
                     }
                 }
                 Spacer(Modifier.width(8.dp))
-                if (isPlanningMode) {
+                if (navigationState.isActive) {
+                    IconButton(onClick = onStopNavigate, modifier = Modifier.size(48.dp)) {
+                        Icon(Icons.Default.Close, stringResource(R.string.stop_navigation), modifier = Modifier.size(24.dp), tint = MaterialTheme.colorScheme.error)
+                    }
+                    IconButton(onClick = onSave, modifier = Modifier.size(48.dp)) {
+                        Icon(Icons.Default.Save, stringResource(R.string.save_route), modifier = Modifier.size(24.dp), tint = MaterialTheme.colorScheme.primary)
+                    }
+                } else if (isPlanningMode) {
                     IconButton(onClick = onUndo, modifier = Modifier.size(48.dp)) {
                         Icon(Icons.Default.Undo, stringResource(R.string.undo), modifier = Modifier.size(24.dp))
                     }
                     IconButton(onClick = onClear, modifier = Modifier.size(48.dp)) {
                         Icon(Icons.Default.Delete, stringResource(R.string.clear_route), modifier = Modifier.size(24.dp), tint = MaterialTheme.colorScheme.error)
+                    }
+                    if (waypoints.size >= 1) {
+                        IconButton(onClick = onStartNavigate, modifier = Modifier.size(48.dp)) {
+                            Icon(Icons.Default.Navigation, stringResource(R.string.navigate), modifier = Modifier.size(24.dp), tint = MaterialTheme.colorScheme.primary)
+                        }
                     }
                     IconButton(onClick = onSave, modifier = Modifier.size(48.dp)) {
                         Icon(Icons.Default.Save, stringResource(R.string.save_route), modifier = Modifier.size(24.dp), tint = MaterialTheme.colorScheme.primary)

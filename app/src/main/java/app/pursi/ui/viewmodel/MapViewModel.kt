@@ -41,6 +41,8 @@ import kotlinx.coroutines.delay
 import app.pursi.weather.sunriseSunset
 import javax.inject.Inject
 
+import app.pursi.navigation.NavigationController
+import app.pursi.navigation.XteDirection
 import app.pursi.water.WaterObservation
 import app.pursi.water.WaterObservationRepository
 
@@ -347,6 +349,9 @@ class MapViewModel @Inject constructor(
     private val _viewingTrackId = MutableStateFlow<String?>(null)
     val viewingTrackId: StateFlow<String?> = _viewingTrackId.asStateFlow()
 
+    private val _navigationState = MutableStateFlow(NavigationState())
+    val navigationState: StateFlow<NavigationState> = _navigationState.asStateFlow()
+
     init {
         aisRepository.setEnabled(_uiState.value.showAis)
     }
@@ -371,6 +376,84 @@ class MapViewModel @Inject constructor(
 
     fun setViewingTrackId(id: String?) {
         _viewingTrackId.value = id
+    }
+
+    fun startNavigation(waypoints: List<LatLng>) {
+        if (waypoints.isEmpty()) return
+        val totalNm = if (waypoints.size >= 2) {
+            var d = 0.0
+            for (i in 0 until waypoints.size - 1) {
+                d += NavigationController.distanceNm(waypoints[i], waypoints[i + 1])
+            }
+            d
+        } else 0.0
+
+        val speedKn = currentLocation.value?.speed?.let { it / 0.514f } ?: 0f
+        val etaH = if (speedKn > 0.5f) totalNm / speedKn else 0.0
+
+        _navigationState.value = NavigationState(
+            isActive = true,
+            waypoints = waypoints,
+            currentIndex = 0,
+            totalDistanceRemainingNm = totalNm,
+            etaHours = etaH,
+        )
+    }
+
+    fun stopNavigation() {
+        _navigationState.value = NavigationState()
+    }
+
+    fun updateNavigation(boatLat: Double, boatLon: Double, boatHeading: Float, speedKn: Float) {
+        val state = _navigationState.value
+        if (!state.isActive || state.waypoints.isEmpty()) return
+
+        val boatPos = LatLng(boatLat, boatLon)
+
+        val newIndex = NavigationController.findCurrentWaypointIndex(
+            boatPos, boatHeading, state.waypoints, state.currentIndex
+        )
+
+        if (newIndex >= state.waypoints.size) {
+            _navigationState.value = NavigationState()
+            return
+        }
+
+        val currentWp = state.waypoints[newIndex]
+        val bearing = NavigationController.bearingTo(boatPos, currentWp)
+        val relBearing = NavigationController.relativeBearing(boatPos, boatHeading, currentWp)
+        val distNm = NavigationController.distanceNm(boatPos, currentWp)
+
+        val totalRemaining = if (newIndex < state.waypoints.size - 1) {
+            var d = distNm
+            for (i in newIndex until state.waypoints.size - 1) {
+                d += NavigationController.distanceNm(state.waypoints[i], state.waypoints[i + 1])
+            }
+            d
+        } else distNm
+
+        val etaH = if (speedKn > 0.5f) totalRemaining / speedKn else state.etaHours
+
+        var xteNm = 0.0
+        var xteDir = XteDirection.ON_TRACK
+        if (newIndex > 0) {
+            val cte = NavigationController.crossTrackError(
+                boatPos, state.waypoints[newIndex - 1], currentWp
+            )
+            xteNm = cte.xteNm
+            xteDir = cte.direction
+        }
+
+        _navigationState.value = state.copy(
+            currentIndex = newIndex,
+            bearingToWpDeg = bearing,
+            relativeBearingDeg = relBearing,
+            distanceToWpNm = distNm,
+            totalDistanceRemainingNm = totalRemaining,
+            etaHours = etaH,
+            xteNm = xteNm,
+            xteDirection = xteDir,
+        )
     }
 
     fun setCameraTarget(latitude: Double, longitude: Double) {

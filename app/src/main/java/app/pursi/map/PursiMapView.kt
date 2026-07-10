@@ -54,6 +54,7 @@ import app.pursi.map.ais.AisVesselOverlay
 import app.pursi.map.overlays.BoatOverlay
 import app.pursi.map.overlays.ChartOverlay
 import app.pursi.map.overlays.MeasureOverlay
+import app.pursi.map.overlays.NavigationOverlay
 import app.pursi.map.overlays.EmodnetDepthOverlay
 import app.pursi.map.overlays.RadarOverlay
 import app.pursi.map.overlays.RouteOverlay
@@ -65,6 +66,7 @@ import app.pursi.ui.viewmodel.BoatIconSize
 import app.pursi.ui.viewmodel.FollowMode
 import app.pursi.ui.viewmodel.MapPaneState
 import app.pursi.ui.viewmodel.NavmarkSize
+import app.pursi.ui.viewmodel.NavigationState
 import app.pursi.ui.viewmodel.OrientationMode
 import app.pursi.weather.LightningStrike
 import app.pursi.weather.MarineWarning
@@ -146,7 +148,9 @@ fun PursiMapView(
     onAlgaeObservationClick: (Int) -> Unit = {},
     onRadarEffectiveDelay: (Int) -> Unit = {},
     showSectors: Boolean = true,
-    viewportBounds: BoundingBox? = null
+    viewportBounds: BoundingBox? = null,
+    navigationState: NavigationState = NavigationState(),
+    lastLocation: LatLng? = null
 ) {
     val context = LocalContext.current
     val mapView = remember {
@@ -669,6 +673,11 @@ fun PursiMapView(
     LaunchedEffect(mapReadyToken, savedRouteLines) {
         val map = currentMap.value as? MapLibreMap ?: return@LaunchedEffect
         map.getStyle { style -> RouteOverlay.updateSavedRoutes(style, savedRouteLines) }
+    }
+
+    LaunchedEffect(mapReadyToken, navigationState, lastLocation) {
+        val map = currentMap.value as? MapLibreMap ?: return@LaunchedEffect
+        map.getStyle { style -> NavigationOverlay.update(style, navigationState, lastLocation) }
     }
 
     // ── AIS vessel overlay ──────────────────────────────────────────

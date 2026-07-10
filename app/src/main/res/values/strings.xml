@@ -378,4 +378,9 @@
     <string name="wind_meter_size_medium">Normal</string>
     <string name="wind_meter_size_large">Large</string>
     <string name="split_view">Split view</string>
+    <string name="navigate">Navigate</string>
+    <string name="navigate_here">Navigate here</string>
+    <string name="navigate_here_title">Navigate to</string>
+    <string name="add_to_route">Add to route</string>
+    <string name="stop_navigation">Stop</string>
 </resources>

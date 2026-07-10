@@ -4,6 +4,8 @@ import app.pursi.water.WaterObservation
 import app.pursi.data.model.EmodnetDepthSample
 import app.pursi.data.model.WfsFeature
 import app.pursi.datasource.core.ChartProvider
+import app.pursi.navigation.XteDirection
+import org.maplibre.android.geometry.LatLng
 
 enum class NavmarkSize(val multiplier: Float) {
     SMALL(0.7f),
@@ -53,6 +55,21 @@ data class MapUiState(
     val splitMode: Boolean = false,
     val splitOrientation: SplitOrientation = SplitOrientation.Vertical,
     val splitFraction: Float = 0.5f,
+
+    val navigationState: NavigationState = NavigationState(),
+)
+
+data class NavigationState(
+    val isActive: Boolean = false,
+    val waypoints: List<LatLng> = emptyList(),
+    val currentIndex: Int = 0,
+    val bearingToWpDeg: Double = 0.0,
+    val relativeBearingDeg: Double = 0.0,
+    val distanceToWpNm: Double = 0.0,
+    val totalDistanceRemainingNm: Double = 0.0,
+    val etaHours: Double = 0.0,
+    val xteNm: Double = 0.0,
+    val xteDirection: XteDirection = XteDirection.ON_TRACK,
 )
 
 data class FinnishMapState(
