@@ -87,8 +87,6 @@ fun SettingsScreen(
     initialCamLon: Double = Double.NaN,
     initialCamZoom: Double = 7.0,
     chartProviders: List<ChartProvider> = emptyList(),
-    useGoogleLocation: Boolean = false,
-    onToggleGoogleLocation: (Boolean) -> Unit = {},
     boatIconSize: BoatIconSize = BoatIconSize.MEDIUM,
     onBoatIconSizeChange: (BoatIconSize) -> Unit = {},
     boatIconColor: String = "#1976D2",
@@ -793,39 +791,6 @@ fun SettingsScreen(
             }
         }
 
-        item {
-            Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-                Column(Modifier.padding(16.dp)) {
-                    Text(stringResource(R.string.location_source), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    Spacer(Modifier.height(8.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        val options = listOf(false, true)
-                        val labels = listOf(stringResource(R.string.location_source_android), stringResource(R.string.location_source_google))
-                        options.forEachIndexed { index, opt ->
-                            val selected = useGoogleLocation == opt
-                            FilterChip(
-                                selected = selected,
-                                onClick = { onToggleGoogleLocation(opt) },
-                                label = { Text(labels[index], style = MaterialTheme.typography.labelSmall) },
-                                modifier = Modifier.padding(end = 8.dp)
-                            )
-                        }
-                    }
-                    Spacer(Modifier.height(4.dp))
-                    Text(stringResource(R.string.location_source_desc),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
-                    Spacer(Modifier.height(4.dp))
-                    Text(stringResource(R.string.location_privacy_note),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
-                }
-            }
-        }
-        
         // ── TIETOA ──
         item { SectionHeader(stringResource(R.string.settings_section_about)) }
 

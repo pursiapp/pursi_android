@@ -131,8 +131,6 @@ dependencies {
     implementation("org.maplibre.gl:android-sdk:13.2.0")
 
     // Location
-    implementation("com.google.android.gms:play-services-location:21.3.0")
-
     // Networking
     implementation("com.squareup.retrofit2:retrofit:2.11.0")
     implementation("com.squareup.retrofit2:converter-kotlinx-serialization:2.11.0")

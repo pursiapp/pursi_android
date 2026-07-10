@@ -338,11 +338,6 @@
     <string name="settings_section_offline">Offline-Karten</string>
     <string name="settings_section_other">Sonstiges</string>
     <string name="settings_section_about">Über</string>
-    <string name="location_source">Standortquelle</string>
-    <string name="location_source_android">Android</string>
-    <string name="location_source_google">Google Play</string>
-    <string name="location_source_desc">Geräte-GPS-Dienst.</string>
-    <string name="location_privacy_note">Google Play: funktioniert in Innenräumen mit WLAN, sendet aber Standortdaten an Google. Android: verwendet nur das GPS des Geräts, sendet nichts an Google.</string>
     <string name="navmark_type">Typ</string>
     <string name="navmark_status">Status</string>
     <string name="navmark_in_use">Aktiv</string>

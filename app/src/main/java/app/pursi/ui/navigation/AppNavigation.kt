@@ -144,7 +144,6 @@ fun AppNavigation(
     var keepScreenOn by remember { mutableStateOf(mapPrefs.getBoolean("keep_screen_on", false)) }
     var debugMode by remember { mutableStateOf(mapPrefs.getBoolean("debug_mode", false)) }
     var analyticsEnabled by remember { mutableStateOf(analyticsManager?.enabled ?: true) }
-    var useGoogleLocation by remember { mutableStateOf(mapPrefs.getBoolean("use_google_location", false)) }
     var windUnit by remember { mutableStateOf(WeatherUnitPrefs.windUnit(mapPrefs)) }
     var tempUnit by remember { mutableStateOf(WeatherUnitPrefs.tempUnit(mapPrefs)) }
     var pressureUnit by remember { mutableStateOf(WeatherUnitPrefs.pressureUnit(mapPrefs)) }
@@ -216,12 +215,6 @@ fun AppNavigation(
                     analyticsEnabled = analyticsEnabled,
                     onToggleAnalytics = { value -> analyticsManager?.setEnabled(value); analyticsEnabled = value },
                     onClearWfsCache = { composeScope.launch(Dispatchers.IO) { app.pursi.data.AppDatabase.getInstance(context).wfsFeatureDao().clearAll() } },
-                    useGoogleLocation = useGoogleLocation,
-                    onToggleGoogleLocation = { value ->
-                        mapPrefs.edit().putBoolean("use_google_location", value).apply()
-                        useGoogleLocation = value
-                        ContextCompat.startForegroundService(context, Intent(context, LocationService::class.java))
-                    },
                     analyticsManager = analyticsManager,
                     windUnit = windUnit,
                     onWindUnitChange = { WeatherUnitPrefs.setWindUnit(mapPrefs, it); windUnit = it },
@@ -273,8 +266,6 @@ private data class SharedState(
     val analyticsEnabled: Boolean,
     val onToggleAnalytics: (Boolean) -> Unit,
     val onClearWfsCache: () -> Unit,
-    val useGoogleLocation: Boolean,
-    val onToggleGoogleLocation: (Boolean) -> Unit,
     val analyticsManager: AnalyticsManager?,
     val windUnit: WeatherUnitPrefs.WindUnit,
     val onWindUnitChange: (WeatherUnitPrefs.WindUnit) -> Unit,
@@ -463,8 +454,6 @@ private fun CompactLayout(shared: SharedState) {
                     initialCamLon = shared.savedCamLon,
                     initialCamZoom = shared.savedCamZoom,
                     chartProviders = uiState.chartProviders,
-                    useGoogleLocation = shared.useGoogleLocation,
-                    onToggleGoogleLocation = shared.onToggleGoogleLocation,
                     boatIconSize = uiState.boatIconSize,
                     onBoatIconSizeChange = { shared.mapViewModel.setBoatIconSize(it) },
                     boatIconColor = uiState.boatIconColor,
@@ -684,8 +673,6 @@ private fun ExpandedPanelContent(
                 initialCamLon = shared.savedCamLon,
                 initialCamZoom = shared.savedCamZoom,
                 chartProviders = uiState.chartProviders,
-                useGoogleLocation = shared.useGoogleLocation,
-                onToggleGoogleLocation = shared.onToggleGoogleLocation,
                 boatIconSize = uiState.boatIconSize,
                 onBoatIconSizeChange = { shared.mapViewModel.setBoatIconSize(it) },
                 boatIconColor = uiState.boatIconColor,

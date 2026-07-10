@@ -346,12 +346,6 @@
     <string name="settings_section_other">Other</string>
     <string name="settings_section_about">About</string>
 
-    <string name="location_source">Location source</string>
-    <string name="location_source_android">Android</string>
-    <string name="location_source_google">Google Play</string>
-    <string name="location_source_desc">Device GPS provider.</string>
-    <string name="location_privacy_note">Google Play: toimii sisätiloissa WiFin avulla, mutta lähettää sijaintitietoja Googlelle. Android: käyttää vain laitteen GPS:ää, ei lähetä Googlelle.</string>
-
     <!-- Turvalaite / navmark detail popup -->
     <string name="navmark_type">Type</string>
     <string name="navmark_status">Status</string>

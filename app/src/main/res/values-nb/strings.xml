@@ -338,11 +338,6 @@
     <string name="settings_section_offline">Offline-kart</string>
     <string name="settings_section_other">Annet</string>
     <string name="settings_section_about">Om</string>
-    <string name="location_source">Posisjonskilde</string>
-    <string name="location_source_android">Android</string>
-    <string name="location_source_google">Google Play</string>
-    <string name="location_source_desc">Enhetens GPS-tjeneste.</string>
-    <string name="location_privacy_note">Google Play: fungerer innendørs med Wi-Fi, men sender posisjonsdata til Google. Android: bruker kun enhetens GPS, sender ikke til Google.</string>
     <string name="navmark_type">Type</string>
     <string name="navmark_status">Status</string>
     <string name="navmark_in_use">Aktiv</string>

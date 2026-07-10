@@ -76,7 +76,7 @@
     <string name="data_sources">Datakilder</string>
     <string name="app_version">Pursi v0.5.0</string>
     <string name="app_desc">Gratis søkort-app med åben kildekode</string>
-    <string name="license">Lisens: GPL v3 eller senere</string>
+    <string name="license">Licens: GPL v3 eller nyere</string>
     <string name="traficom_credit">Traficom — Søkort &amp; dybdedata (CC BY 4.0) — Ikke til navigation</string>
     <string name="vayla_credit">Väylävirasto — Navigasjonsdata (CC BY 4.0)</string>
     <string name="fmi_credit">FMI — Vejr, advarsler &amp; radar (CC BY 4.0)</string>
@@ -338,11 +338,6 @@
     <string name="settings_section_offline">Offline-kort</string>
     <string name="settings_section_other">Andet</string>
     <string name="settings_section_about">Om</string>
-    <string name="location_source">Placeringskilde</string>
-    <string name="location_source_android">Android</string>
-    <string name="location_source_google">Google Play</string>
-    <string name="location_source_desc">Enhedens GPS-tjeneste.</string>
-    <string name="location_privacy_note">Google Play: fungerer indendørs med Wi-Fi, men sender placeringsdata til Google. Android: bruger kun enhedens GPS, sender ikke til Google.</string>
     <string name="navmark_type">Type</string>
     <string name="navmark_status">Status</string>
     <string name="navmark_in_use">Aktiv</string>

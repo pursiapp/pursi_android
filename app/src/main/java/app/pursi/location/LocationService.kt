@@ -18,12 +18,6 @@ import android.os.IBinder
 import android.os.Looper
 import android.util.Log
 import androidx.core.app.NotificationCompat
-import com.google.android.gms.location.FusedLocationProviderClient
-import com.google.android.gms.location.LocationCallback
-import com.google.android.gms.location.LocationRequest
-import com.google.android.gms.location.LocationResult
-import com.google.android.gms.location.LocationServices
-import com.google.android.gms.location.Priority
 import dagger.hilt.android.AndroidEntryPoint
 import app.pursi.MainActivity
 import app.pursi.R
@@ -33,25 +27,6 @@ import javax.inject.Inject
 class LocationService : Service() {
 
     @Inject lateinit var locationStateHolder: LocationStateHolder
-
-    private var useGoogleLocation: Boolean = false
-
-    private var fusedLocationClient: FusedLocationProviderClient? = null
-    private val googleCallback = object : LocationCallback() {
-        override fun onLocationResult(result: LocationResult) {
-            result.lastLocation?.let { location ->
-                locationStateHolder.updateLocation(location)
-                adaptInterval(location)
-            }
-        }
-    }
-
-    private var locationRequest: LocationRequest = LocationRequest.Builder(
-        Priority.PRIORITY_HIGH_ACCURACY, 1000L
-    )
-        .setMinUpdateIntervalMillis(500L)
-        .setMaxUpdateDelayMillis(2000L)
-        .build()
 
     private var locationManager: LocationManager? = null
 
@@ -84,7 +59,6 @@ class LocationService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
         locationManager = getSystemService(LOCATION_SERVICE) as LocationManager
         createNotificationChannel()
     }
@@ -115,38 +89,7 @@ class LocationService : Service() {
     private fun startLocationUpdates() {
         if (!hasLocationPermission()) return
         stopLocationUpdates()
-        useGoogleLocation = getSharedPreferences("pursi_map", Context.MODE_PRIVATE)
-            .getBoolean("use_google_location", true)
-        if (useGoogleLocation) {
-            startGoogleLocationUpdates()
-        } else {
-            startAndroidLocationUpdates()
-        }
-    }
-
-    private fun startGoogleLocationUpdates() {
-        try {
-            fusedLocationClient?.requestLocationUpdates(
-                locationRequest,
-                googleCallback,
-                Looper.getMainLooper()
-            ) ?: run {
-                Log.w(TAG, "Google Play Services not available, falling back to LocationManager")
-                useGoogleLocation = false
-                getSharedPreferences("pursi_map", Context.MODE_PRIVATE).edit()
-                    .putBoolean("use_google_location", false).apply()
-                startAndroidLocationUpdates()
-            }
-        } catch (e: SecurityException) {
-            Log.e(TAG, "Google location permission denied", e)
-            stopSelf()
-        } catch (e: IllegalStateException) {
-            Log.e(TAG, "Google Play Services not available", e)
-            useGoogleLocation = false
-            getSharedPreferences("pursi_map", Context.MODE_PRIVATE).edit()
-                .putBoolean("use_google_location", false).apply()
-            startAndroidLocationUpdates()
-        }
+        startAndroidLocationUpdates()
     }
 
     private fun startAndroidLocationUpdates() {
@@ -184,12 +127,9 @@ class LocationService : Service() {
     }
 
     private fun stopLocationUpdates() {
-        fusedLocationClient?.removeLocationUpdates(googleCallback)
-        val mgr = locationManager
-        if (mgr != null) {
-            mgr.removeUpdates(androidGpsListener)
-            mgr.removeUpdates(androidNetworkListener)
-        }
+        val mgr = locationManager ?: return
+        mgr.removeUpdates(androidGpsListener)
+        mgr.removeUpdates(androidNetworkListener)
     }
 
     private fun hasLocationPermission(): Boolean {
@@ -226,15 +166,8 @@ class LocationService : Service() {
             .build()
     }
 
-    fun updateLocationRequest(
-        newIntervalMs: Long,
-        priority: Int = Priority.PRIORITY_HIGH_ACCURACY
-    ) {
+    fun updateLocationRequest(newIntervalMs: Long) {
         intervalMs = newIntervalMs
-        locationRequest = LocationRequest.Builder(priority, newIntervalMs)
-            .setMinUpdateIntervalMillis(newIntervalMs / 2)
-            .setMaxUpdateDelayMillis(newIntervalMs * 2)
-            .build()
         stopLocationUpdates()
         startLocationUpdates()
     }
@@ -260,10 +193,7 @@ class LocationService : Service() {
                     isLowPowerMode = true
                     lowPowerStartTime = 0L
                     lastIntervalChangeMs = now
-                    scheduleIntervalChange(
-                        LOW_POWER_INTERVAL_MS,
-                        Priority.PRIORITY_BALANCED_POWER_ACCURACY
-                    )
+                    scheduleIntervalChange(LOW_POWER_INTERVAL_MS)
                 }
             } else {
                 lowPowerStartTime = 0L
@@ -271,9 +201,9 @@ class LocationService : Service() {
         }
     }
 
-    private fun scheduleIntervalChange(intervalMs: Long, priority: Int = Priority.PRIORITY_HIGH_ACCURACY) {
+    private fun scheduleIntervalChange(intervalMs: Long) {
         Handler(Looper.getMainLooper()).post {
-            updateLocationRequest(intervalMs, priority)
+            updateLocationRequest(intervalMs)
         }
     }
 

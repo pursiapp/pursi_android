@@ -338,11 +338,6 @@
     <string name="settings_section_offline">Offline-kaardid</string>
     <string name="settings_section_other">Muud</string>
     <string name="settings_section_about">Teave</string>
-    <string name="location_source">Asukohaallikas</string>
-    <string name="location_source_android">Android</string>
-    <string name="location_source_google">Google Play</string>
-    <string name="location_source_desc">Seadme GPS-teenus.</string>
-    <string name="location_privacy_note">Google Play: töötab siseruumides Wi-Fi abil, kuid saadab asukohaandmeid Googlele. Android: kasutab ainult seadme GPS-i, ei saada Googlele.</string>
     <string name="navmark_type">Tüüp</string>
     <string name="navmark_status">Olek</string>
     <string name="navmark_in_use">Aktiivne</string>

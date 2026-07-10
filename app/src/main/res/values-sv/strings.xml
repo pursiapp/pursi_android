@@ -346,12 +346,6 @@
     <string name="settings_section_other">Övrigt</string>
     <string name="settings_section_about">Om</string>
 
-    <string name="location_source">Positionskälla</string>
-    <string name="location_source_android">Android</string>
-    <string name="location_source_google">Google Play</string>
-    <string name="location_source_desc">Enhetens GPS-tjänst.</string>
-    <string name="location_privacy_note">Google Play: fungerar inomhus med Wi-Fi, men skickar platsdata till Google. Android: använder endast enhetens GPS, skickar inte till Google.</string>
-
     <string name="navmark_type">Typ</string>
     <string name="navmark_status">Status</string>
     <string name="navmark_in_use">Aktiv</string>
