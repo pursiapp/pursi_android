@@ -45,6 +45,7 @@ object NavigationOverlay {
                 listOf(Feature.fromGeometry(LineString.fromLngLats(linePoints)))
             ))
             style.addSource(src)
+            val ref = if (style.getLayer("layer-nav-upcoming") != null) "layer-nav-upcoming" else "layer-openseamap"
             style.addLayerAbove(LineLayer("layer-nav-passed-line", "nav-passed-line").apply {
                 setProperties(
                     PropertyFactory.lineWidth(3f),
@@ -52,7 +53,7 @@ object NavigationOverlay {
                     PropertyFactory.lineOpacity(0.6f),
                     PropertyFactory.lineDasharray(arrayOf(4f, 2f))
                 )
-            }, "layer-nav-upcoming")
+            }, ref)
         }
 
         val currentWp = wps[idx]
