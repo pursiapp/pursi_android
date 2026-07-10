@@ -68,11 +68,11 @@ fun RouteActionCard(
 
     Card(
         modifier = modifier
-            .widthIn(max = 340.dp),
+            .widthIn(max = if (navigationState.isActive) 200.dp else 340.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f)),
         shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp)
     ) {
-        Column(Modifier.padding(horizontal = 12.dp, vertical = if (navigationState.isActive) 4.dp else 6.dp)) {
+        Column(Modifier.padding(horizontal = 10.dp, vertical = if (navigationState.isActive) 2.dp else 6.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     if (navigationState.isActive) {
@@ -113,11 +113,11 @@ fun RouteActionCard(
                 }
                 Spacer(Modifier.width(8.dp))
                 if (navigationState.isActive) {
-                    IconButton(onClick = onStopNavigate, modifier = Modifier.size(40.dp)) {
-                        Icon(Icons.Default.Close, stringResource(R.string.stop_navigation), modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.error)
+                    IconButton(onClick = onStopNavigate, modifier = Modifier.size(36.dp)) {
+                        Icon(Icons.Default.Close, stringResource(R.string.stop_navigation), modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.error)
                     }
-                    IconButton(onClick = onSave, modifier = Modifier.size(40.dp)) {
-                        Icon(Icons.Default.Save, stringResource(R.string.save_route), modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary)
+                    IconButton(onClick = onSave, modifier = Modifier.size(36.dp)) {
+                        Icon(Icons.Default.Save, stringResource(R.string.save_route), modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
                     }
                 } else if (isPlanningMode) {
                     IconButton(onClick = onUndo, modifier = Modifier.size(48.dp)) {
@@ -140,7 +140,7 @@ fun RouteActionCard(
                     }
                 }
             }
-            if (showReportButton) {
+            if (showReportButton && !navigationState.isActive) {
                 Spacer(Modifier.height(2.dp))
                 TextButton(
                     onClick = onReportObservation,

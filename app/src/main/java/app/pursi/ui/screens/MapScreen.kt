@@ -1069,7 +1069,7 @@ fun MapScreen(
             RouteActionCard(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(bottom = bottomInsetPx + 80.dp),
+                    .padding(bottom = if (navState.isActive) bottomInsetPx + 16.dp else bottomInsetPx + 80.dp),
                 waypoints = activeWps,
                 defaultBoat = defaultBoat,
                 isPlanningMode = routeWaypoints.isNotEmpty(),
