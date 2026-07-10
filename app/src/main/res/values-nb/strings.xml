@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Pursi</string>
+    <string name="app_name">Pursi Beta</string>
     <string name="knots">kn</string>
     <string name="kmh">km/t</string>
     <string name="mph">mph</string>
