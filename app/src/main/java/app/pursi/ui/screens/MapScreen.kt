@@ -348,7 +348,7 @@ fun MapScreen(
                 val heading = lastKnownBearing ?: 0f
                 mapViewModel.updateNavigation(
                     loc.latitude, loc.longitude, heading,
-                    loc.speed / 0.514f
+                    app.pursi.location.SpeedCalculator.metersPerSecondToKnots(loc.speed)
                 )
             }
             kotlinx.coroutines.delay(1000)
@@ -554,7 +554,9 @@ fun MapScreen(
                     mapViewModel.fetchVesselMetadata(mmsi)
                 },
                 onLongPress = { latlng ->
-                    routeWaypoints = routeWaypoints + latlng
+                    if (!navState.isActive) {
+                        routeWaypoints = routeWaypoints + latlng
+                    }
                 },
                 onTwoFingerMeasure = { p1, p2 ->
                     val d = app.pursi.location.SpeedCalculator.distanceBetween(

@@ -162,7 +162,7 @@ class MapViewModel @Inject constructor(
                     }
                     for (p in points) {
                         p.speedOverGround?.let { speed ->
-                            val kn = speed / 0.514f
+                            val kn = app.pursi.location.SpeedCalculator.metersPerSecondToKnots(speed)
                             if (maxSpeedKn == null || kn > maxSpeedKn) maxSpeedKn = kn
                         }
                     }
@@ -388,7 +388,7 @@ class MapViewModel @Inject constructor(
             d
         } else 0.0
 
-        val speedKn = currentLocation.value?.speed?.let { it / 0.514f } ?: 0f
+        val speedKn = currentLocation.value?.speed?.let { app.pursi.location.SpeedCalculator.metersPerSecondToKnots(it) } ?: 0f
         val etaH = if (speedKn > 0.5f) totalNm / speedKn else 0.0
 
         _navigationState.value = NavigationState(

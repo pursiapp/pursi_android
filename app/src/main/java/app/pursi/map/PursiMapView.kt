@@ -675,7 +675,7 @@ fun PursiMapView(
         map.getStyle { style -> RouteOverlay.updateSavedRoutes(style, savedRouteLines) }
     }
 
-    LaunchedEffect(mapReadyToken, navigationState, lastLocation) {
+    LaunchedEffect(mapReadyToken, navigationState) {
         val map = currentMap.value as? MapLibreMap ?: return@LaunchedEffect
         map.getStyle { style -> NavigationOverlay.update(style, navigationState, lastLocation) }
     }

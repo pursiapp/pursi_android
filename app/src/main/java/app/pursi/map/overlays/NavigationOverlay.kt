@@ -105,15 +105,15 @@ object NavigationOverlay {
     }
 
     private fun removeAll(style: Style) {
-        val targets = listOf(
+        val layerIds = listOf(
             "layer-nav-upcoming", "layer-nav-passed-line", "layer-nav-boat-line",
-            "layer-nav-dots-passed", "layer-nav-dots-upcoming",
+            "layer-nav-dots-passed", "layer-nav-dots-upcoming"
+        )
+        val sourceIds = listOf(
             "nav-upcoming", "nav-passed-line", "nav-boat-line",
             "nav-dots-passed", "nav-dots-upcoming"
         )
-        for (t in targets) {
-            OverlayUtils.safeRemoveLayer(style, t)
-            OverlayUtils.safeRemoveSource(style, t)
-        }
+        for (t in layerIds) OverlayUtils.safeRemoveLayer(style, t)
+        for (t in sourceIds) OverlayUtils.safeRemoveSource(style, t)
     }
 }
