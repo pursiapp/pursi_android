@@ -11,10 +11,6 @@ license that covers the rest of the project. You retain copyright on your
 own contributions. You confirm that the work is yours to contribute, or
 that you have permission from the copyright holder.
 
-# Contributing to Pursi
-
-Thank you for considering contributing to Pursi!
-
 ## Development Setup
 
 1. Clone the repository
