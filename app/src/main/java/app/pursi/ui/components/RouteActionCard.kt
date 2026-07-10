@@ -72,10 +72,18 @@ fun RouteActionCard(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f)),
         shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp)
     ) {
-        Column(Modifier.padding(horizontal = 12.dp, vertical = 6.dp)) {
+        Column(Modifier.padding(horizontal = 12.dp, vertical = if (navigationState.isActive) 4.dp else 6.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    if (label != null) {
+                    if (navigationState.isActive) {
+                        val wp = if (navigationState.waypoints.isNotEmpty())
+                            "WP ${navigationState.currentIndex + 1}/${navigationState.waypoints.size}" else ""
+                        Text(
+                            "${"%.1f".format(navigationState.distanceToWpNm)} nm · $wp",
+                            style = MaterialTheme.typography.bodySmall,
+                            fontWeight = FontWeight.Medium
+                        )
+                    } else if (label != null) {
                         Text(
                             label,
                             style = MaterialTheme.typography.bodySmall,
@@ -93,21 +101,23 @@ fun RouteActionCard(
                             fontWeight = FontWeight.Medium
                         )
                     }
-                    eta?.let { e ->
-                        Text(
-                            RoutePlanner.formatTimeEstimate(e),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                        )
+                    if (!navigationState.isActive) {
+                        eta?.let { e ->
+                            Text(
+                                RoutePlanner.formatTimeEstimate(e),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                            )
+                        }
                     }
                 }
                 Spacer(Modifier.width(8.dp))
                 if (navigationState.isActive) {
-                    IconButton(onClick = onStopNavigate, modifier = Modifier.size(48.dp)) {
-                        Icon(Icons.Default.Close, stringResource(R.string.stop_navigation), modifier = Modifier.size(24.dp), tint = MaterialTheme.colorScheme.error)
+                    IconButton(onClick = onStopNavigate, modifier = Modifier.size(40.dp)) {
+                        Icon(Icons.Default.Close, stringResource(R.string.stop_navigation), modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.error)
                     }
-                    IconButton(onClick = onSave, modifier = Modifier.size(48.dp)) {
-                        Icon(Icons.Default.Save, stringResource(R.string.save_route), modifier = Modifier.size(24.dp), tint = MaterialTheme.colorScheme.primary)
+                    IconButton(onClick = onSave, modifier = Modifier.size(40.dp)) {
+                        Icon(Icons.Default.Save, stringResource(R.string.save_route), modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary)
                     }
                 } else if (isPlanningMode) {
                     IconButton(onClick = onUndo, modifier = Modifier.size(48.dp)) {
