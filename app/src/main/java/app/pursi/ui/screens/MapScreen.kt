@@ -138,23 +138,7 @@ private fun buildOsmSeamarkAt(map: MapLibreMap, clickLat: Double, clickLng: Doub
     )
 }
 
-private fun MapUiState.toPaneLayerState() = PaneLayerState(
-    chartMode = PaneChartMode.Auto,
-    showLightning = showLightning,
-    showWarnings = showWarnings,
-    showRadar = showRadar,
-    radarTimeOffset = radarTimeOffset,
-    radarOpacity = radarOpacity,
-    showAis = showAis,
-    showAlgae = showAlgae,
-    showDepth = showDepth,
-    showWindMeter = showWindMeter,
-    showVvNavmarks = fiState?.showVvNavmarks ?: true,
-    chartOpacity = chartOpacity,
-    navmarkSize = navmarkSize,
-    boatIconSize = boatIconSize,
-    boatIconColor = boatIconColor,
-)
+private fun MapUiState.toPaneLayerState() = PaneLayerState.fromMapUiState(this)
 
 @Composable
 fun MapScreen(
@@ -309,10 +293,14 @@ fun MapScreen(
     var pane2ZoomToBoatLevel by remember { mutableStateOf(initialCamZoom.toFloat()) }
 
     // Per-pane layer state (independently toggleable in split mode)
-    var paneALayerState by remember { mutableStateOf(uiState.toPaneLayerState()) }
-    var paneBLayerState by remember { mutableStateOf(uiState.toPaneLayerState()) }
+    val paneALayerState by mapViewModel.paneALayerState.collectAsStateWithLifecycle()
+    val paneBLayerState by mapViewModel.paneBLayerState.collectAsStateWithLifecycle()
     // Which pane's layers panel is open: null = closed, true = pane A, false = pane B
     var layersTargetPane by remember { mutableStateOf<Boolean?>(null) }
+
+    // Per-pane initial camera (persisted across restarts)
+    val paneAInitialCam = remember { mapViewModel.getPaneInitialCamera("a") }
+    val paneBInitialCam = remember { mapViewModel.getPaneInitialCamera("b") }
 
     var mapBearing by remember { mutableStateOf(0f) }
     var pane2Bearing by remember { mutableStateOf(0f) }
@@ -422,7 +410,7 @@ fun MapScreen(
             }
         }
 
-        val mapPaneParams: @Composable (MapPaneState, (Float) -> Unit) -> Unit = { paneState, camBearingCallback ->
+        val mapPaneParams: @Composable (MapPaneState, (Float) -> Unit, (Double, Double, Double) -> Unit) -> Unit = { paneState, camBearingCallback, paneOnCameraMoved ->
             PursiMapView(
                 modifier = Modifier.fillMaxSize(),
                 paneState = paneState,
@@ -458,6 +446,7 @@ fun MapScreen(
                 },
                 onCameraMoved = { lat, lon, zoom ->
                     currentZoom = zoom
+                    paneOnCameraMoved(lat, lon, zoom)
                     onCameraMoved(lat, lon, zoom)
                 },
                 onCameraIdle = { sw, ne ->
@@ -578,8 +567,10 @@ fun MapScreen(
                     initialCamLon = initialCamLon,
                     initialCamZoom = initialCamZoom,
                     paneLayerState = uiState.toPaneLayerState(),
-                )
-            ) { mapBearing = it }
+                ),
+                { mapBearing = it },
+                { _, _, _ -> }
+            )
         } else {
             val orientation = uiState.splitOrientation
             val fraction = uiState.splitFraction
@@ -609,12 +600,14 @@ fun MapScreen(
                                     zoomToBoatLevel = pane2ZoomToBoatLevel,
                                     followMode = uiState.followMode,
                                     orientationMode = uiState.orientationMode,
-                                    initialCamLat = initialCamLat,
-                                    initialCamLon = initialCamLon,
-                                    initialCamZoom = initialCamZoom,
+                                    initialCamLat = paneBInitialCam.first,
+                                    initialCamLon = paneBInitialCam.second,
+                                    initialCamZoom = paneBInitialCam.third,
                                     paneLayerState = paneBLayerState,
-                                )
-                            ) { pane2Bearing = it }
+                                ),
+                                { pane2Bearing = it },
+                                { lat, lon, zoom -> mapViewModel.setPaneCamera("b", lat, lon, zoom) }
+                            )
                             PaneControls(
                                 paneBearing = pane2Bearing,
                                 onZoomIn = {
@@ -643,12 +636,14 @@ fun MapScreen(
                                     zoomToBoatLevel = zoomToBoatLevel,
                                     followMode = uiState.followMode,
                                     orientationMode = uiState.orientationMode,
-                                    initialCamLat = initialCamLat,
-                                    initialCamLon = initialCamLon,
-                                    initialCamZoom = initialCamZoom,
+                                    initialCamLat = paneAInitialCam.first,
+                                    initialCamLon = paneAInitialCam.second,
+                                    initialCamZoom = paneAInitialCam.third,
                                     paneLayerState = paneALayerState,
-                                )
-                            ) { mapBearing = it }
+                                ),
+                                { mapBearing = it },
+                                { lat, lon, zoom -> mapViewModel.setPaneCamera("a", lat, lon, zoom) }
+                            )
                             PaneControls(
                                 paneBearing = mapBearing,
                                 onZoomIn = {
@@ -699,12 +694,14 @@ fun MapScreen(
                                     zoomToBoatLevel = zoomToBoatLevel,
                                     followMode = uiState.followMode,
                                     orientationMode = uiState.orientationMode,
-                                    initialCamLat = initialCamLat,
-                                    initialCamLon = initialCamLon,
-                                    initialCamZoom = initialCamZoom,
+                                    initialCamLat = paneAInitialCam.first,
+                                    initialCamLon = paneAInitialCam.second,
+                                    initialCamZoom = paneAInitialCam.third,
                                     paneLayerState = paneALayerState,
-                                )
-                            ) { mapBearing = it }
+                                ),
+                                { mapBearing = it },
+                                { lat, lon, zoom -> mapViewModel.setPaneCamera("a", lat, lon, zoom) }
+                            )
                             PaneControls(
                                 paneBearing = mapBearing,
                                 onZoomIn = {
@@ -742,12 +739,14 @@ fun MapScreen(
                                     zoomToBoatLevel = pane2ZoomToBoatLevel,
                                     followMode = uiState.followMode,
                                     orientationMode = uiState.orientationMode,
-                                    initialCamLat = initialCamLat,
-                                    initialCamLon = initialCamLon,
-                                    initialCamZoom = initialCamZoom,
+                                    initialCamLat = paneBInitialCam.first,
+                                    initialCamLon = paneBInitialCam.second,
+                                    initialCamZoom = paneBInitialCam.third,
                                     paneLayerState = paneBLayerState,
-                                )
-                            ) { pane2Bearing = it }
+                                ),
+                                { pane2Bearing = it },
+                                { lat, lon, zoom -> mapViewModel.setPaneCamera("b", lat, lon, zoom) }
+                            )
                             PaneControls(
                                 paneBearing = pane2Bearing,
                                 onZoomIn = {
@@ -785,12 +784,14 @@ fun MapScreen(
                                     zoomToBoatLevel = zoomToBoatLevel,
                                     followMode = uiState.followMode,
                                     orientationMode = uiState.orientationMode,
-                                    initialCamLat = initialCamLat,
-                                    initialCamLon = initialCamLon,
-                                    initialCamZoom = initialCamZoom,
+                                    initialCamLat = paneAInitialCam.first,
+                                    initialCamLon = paneAInitialCam.second,
+                                    initialCamZoom = paneAInitialCam.third,
                                     paneLayerState = paneALayerState,
-                                )
-                            ) { mapBearing = it }
+                                ),
+                                { mapBearing = it },
+                                { lat, lon, zoom -> mapViewModel.setPaneCamera("a", lat, lon, zoom) }
+                            )
                             PaneControls(
                                 paneBearing = mapBearing,
                                 onZoomIn = {
@@ -828,12 +829,14 @@ fun MapScreen(
                                     zoomToBoatLevel = pane2ZoomToBoatLevel,
                                     followMode = uiState.followMode,
                                     orientationMode = uiState.orientationMode,
-                                    initialCamLat = initialCamLat,
-                                    initialCamLon = initialCamLon,
-                                    initialCamZoom = initialCamZoom,
+                                    initialCamLat = paneBInitialCam.first,
+                                    initialCamLon = paneBInitialCam.second,
+                                    initialCamZoom = paneBInitialCam.third,
                                     paneLayerState = paneBLayerState,
-                                )
-                            ) { pane2Bearing = it }
+                                ),
+                                { pane2Bearing = it },
+                                { lat, lon, zoom -> mapViewModel.setPaneCamera("b", lat, lon, zoom) }
+                            )
                             PaneControls(
                                 paneBearing = pane2Bearing,
                                 onZoomIn = {
@@ -976,8 +979,8 @@ fun MapScreen(
                 showAlgae = targetState.showAlgae,
                 onChartOpacityChange = { newOpacity ->
                     when {
-                        targetIsPaneA -> paneALayerState = targetState.copy(chartOpacity = newOpacity)
-                        targetIsPaneB -> paneBLayerState = targetState.copy(chartOpacity = newOpacity)
+                        targetIsPaneA -> mapViewModel.setPaneALayerState(targetState.copy(chartOpacity = newOpacity))
+                        targetIsPaneB -> mapViewModel.setPaneBLayerState(targetState.copy(chartOpacity = newOpacity))
                         else -> chartOpacity = newOpacity
                     }
                 },
@@ -992,36 +995,36 @@ fun MapScreen(
                 },
                 onToggleRadar = {
                     when {
-                        targetIsPaneA -> paneALayerState = targetState.copy(showRadar = !targetState.showRadar)
-                        targetIsPaneB -> paneBLayerState = targetState.copy(showRadar = !targetState.showRadar)
+                        targetIsPaneA -> mapViewModel.setPaneALayerState(targetState.copy(showRadar = !targetState.showRadar))
+                        targetIsPaneB -> mapViewModel.setPaneBLayerState(targetState.copy(showRadar = !targetState.showRadar))
                         else -> mapViewModel.toggleRainAndLightning()
                     }
                 },
                 onToggleAis = {
                     when {
-                        targetIsPaneA -> paneALayerState = targetState.copy(showAis = !targetState.showAis)
-                        targetIsPaneB -> paneBLayerState = targetState.copy(showAis = !targetState.showAis)
+                        targetIsPaneA -> mapViewModel.setPaneALayerState(targetState.copy(showAis = !targetState.showAis))
+                        targetIsPaneB -> mapViewModel.setPaneBLayerState(targetState.copy(showAis = !targetState.showAis))
                         else -> mapViewModel.toggleShowAis()
                     }
                 },
                 onToggleDepth = {
                     when {
-                        targetIsPaneA -> paneALayerState = targetState.copy(showDepth = !targetState.showDepth)
-                        targetIsPaneB -> paneBLayerState = targetState.copy(showDepth = !targetState.showDepth)
+                        targetIsPaneA -> mapViewModel.setPaneALayerState(targetState.copy(showDepth = !targetState.showDepth))
+                        targetIsPaneB -> mapViewModel.setPaneBLayerState(targetState.copy(showDepth = !targetState.showDepth))
                         else -> mapViewModel.toggleShowDepth()
                     }
                 },
                 onToggleWindMeter = {
                     when {
-                        targetIsPaneA -> paneALayerState = targetState.copy(showWindMeter = !targetState.showWindMeter)
-                        targetIsPaneB -> paneBLayerState = targetState.copy(showWindMeter = !targetState.showWindMeter)
+                        targetIsPaneA -> mapViewModel.setPaneALayerState(targetState.copy(showWindMeter = !targetState.showWindMeter))
+                        targetIsPaneB -> mapViewModel.setPaneBLayerState(targetState.copy(showWindMeter = !targetState.showWindMeter))
                         else -> mapViewModel.toggleShowWindMeter()
                     }
                 },
                 onToggleAlgae = {
                     when {
-                        targetIsPaneA -> paneALayerState = targetState.copy(showAlgae = !targetState.showAlgae)
-                        targetIsPaneB -> paneBLayerState = targetState.copy(showAlgae = !targetState.showAlgae)
+                        targetIsPaneA -> mapViewModel.setPaneALayerState(targetState.copy(showAlgae = !targetState.showAlgae))
+                        targetIsPaneB -> mapViewModel.setPaneBLayerState(targetState.copy(showAlgae = !targetState.showAlgae))
                         else -> mapViewModel.toggleShowAlgae()
                     }
                 },

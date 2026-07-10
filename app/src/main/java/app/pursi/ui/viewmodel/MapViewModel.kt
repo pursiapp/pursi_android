@@ -91,6 +91,30 @@ class MapViewModel @Inject constructor(
     private var prevFetchMaxLng = Double.NaN
     private var prevFetchZoom = 0.0
     private var depthFetchJob: kotlinx.coroutines.Job? = null
+
+    // Per-pane camera persistence (dual-map view)
+    private var paneACamLat = Double.NaN
+    private var paneACamLon = Double.NaN
+    private var paneACamZoom = 7.0
+    private var paneBCamLat = Double.NaN
+    private var paneBCamLon = Double.NaN
+    private var paneBCamZoom = 7.0
+    private val camAHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private val camBHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private val paneACamSaveRunnable = Runnable {
+        prefs.edit()
+            .putFloat("cam_a_lat", paneACamLat.toFloat())
+            .putFloat("cam_a_lon", paneACamLon.toFloat())
+            .putFloat("cam_a_zoom", paneACamZoom.toFloat())
+            .apply()
+    }
+    private val paneBCamSaveRunnable = Runnable {
+        prefs.edit()
+            .putFloat("cam_b_lat", paneBCamLat.toFloat())
+            .putFloat("cam_b_lon", paneBCamLon.toFloat())
+            .putFloat("cam_b_zoom", paneBCamZoom.toFloat())
+            .apply()
+    }
     private var turvalaiteFetchJob: kotlinx.coroutines.Job? = null
     private var turvalaitevikaFetchJob: kotlinx.coroutines.Job? = null
     private val wfsRequestTimestamps = ConcurrentLinkedQueue<Long>()
@@ -309,6 +333,11 @@ class MapViewModel @Inject constructor(
     )
     val uiState: StateFlow<MapUiState> = _uiState.asStateFlow()
 
+    private val _paneALayerState = MutableStateFlow(loadPaneLayerState("a"))
+    val paneALayerState: StateFlow<PaneLayerState> = _paneALayerState.asStateFlow()
+    private val _paneBLayerState = MutableStateFlow(loadPaneLayerState("b"))
+    val paneBLayerState: StateFlow<PaneLayerState> = _paneBLayerState.asStateFlow()
+
     private val _searchTarget = MutableStateFlow<LatLng?>(null)
     val searchTarget: StateFlow<LatLng?> = _searchTarget.asStateFlow()
 
@@ -387,6 +416,47 @@ class MapViewModel @Inject constructor(
         }
     }
 
+    fun setPaneCamera(letter: String, latitude: Double, longitude: Double, zoom: Double) {
+        when (letter) {
+            "a" -> {
+                paneACamLat = latitude; paneACamLon = longitude; paneACamZoom = zoom
+                camAHandler.removeCallbacks(paneACamSaveRunnable)
+                camAHandler.postDelayed(paneACamSaveRunnable, 500L)
+            }
+            "b" -> {
+                paneBCamLat = latitude; paneBCamLon = longitude; paneBCamZoom = zoom
+                camBHandler.removeCallbacks(paneBCamSaveRunnable)
+                camBHandler.postDelayed(paneBCamSaveRunnable, 500L)
+            }
+        }
+        setCameraTarget(latitude, longitude)
+    }
+
+    fun getPaneInitialCamera(letter: String): Triple<Double, Double, Double> {
+        val lat = when (letter) {
+            "a" -> prefs.getFloat("cam_a_lat", Float.NaN).toDouble()
+            "b" -> prefs.getFloat("cam_b_lat", Float.NaN).toDouble()
+            else -> Double.NaN
+        }
+        val lon = when (letter) {
+            "a" -> prefs.getFloat("cam_a_lon", Float.NaN).toDouble()
+            "b" -> prefs.getFloat("cam_b_lon", Float.NaN).toDouble()
+            else -> Double.NaN
+        }
+        val zoom = when (letter) {
+            "a" -> prefs.getFloat("cam_a_zoom", 7.0f).toDouble()
+            "b" -> prefs.getFloat("cam_b_zoom", 7.0f).toDouble()
+            else -> 7.0
+        }
+        if (lat.isNaN() || lon.isNaN()) {
+            val fallbackLat = prefs.getFloat("cam_lat", app.pursi.DEFAULT_LAT.toFloat()).toDouble()
+            val fallbackLon = prefs.getFloat("cam_lon", app.pursi.DEFAULT_LON.toFloat()).toDouble()
+            val fallbackZoom = prefs.getFloat("cam_zoom", 7.0f).toDouble()
+            return Triple(fallbackLat, fallbackLon, fallbackZoom)
+        }
+        return Triple(lat, lon, zoom)
+    }
+
     private fun boundsChangedSignificantly(
         minLat: Double, minLng: Double, maxLat: Double, maxLng: Double, zoom: Double
     ): Boolean {
@@ -433,6 +503,38 @@ class MapViewModel @Inject constructor(
     fun setChartOpacity(opacity: Float) {
         _uiState.update { it.copy(chartOpacity = opacity) }
         savedStateHandle["chartOpacity"] = opacity
+    }
+
+    fun setPaneALayerState(state: PaneLayerState) {
+        _paneALayerState.value = state
+        persistPaneLayerState("a", state)
+    }
+
+    fun setPaneBLayerState(state: PaneLayerState) {
+        _paneBLayerState.value = state
+        persistPaneLayerState("b", state)
+    }
+
+    private fun loadPaneLayerState(letter: String): PaneLayerState {
+        val savedHandleKey = "pane${letter.uppercase()}LayerState"
+        val prefsKey = "pane_${letter}_layer_state"
+        val fromHandle = savedStateHandle.get<String>(savedHandleKey)
+        if (fromHandle != null) {
+            val parsed = PaneLayerState.fromJson(fromHandle)
+            if (parsed != PaneLayerState()) return parsed
+        }
+        val fromPrefs = prefs.getString(prefsKey, null)
+        if (fromPrefs != null) {
+            val parsed = PaneLayerState.fromJson(fromPrefs)
+            return parsed
+        }
+        return PaneLayerState.fromMapUiState(_uiState.value)
+    }
+
+    private fun persistPaneLayerState(letter: String, state: PaneLayerState) {
+        val json = state.toJson()
+        savedStateHandle["pane${letter.uppercase()}LayerState"] = json
+        prefs.edit().putString("pane_${letter}_layer_state", json).apply()
     }
 
     fun toggleShowLightning() = toggleUiFlag("showLightning", { it.showLightning }, { s, v -> s.copy(showLightning = v) })
@@ -826,8 +928,10 @@ class MapViewModel @Inject constructor(
     }
 
     fun setSplitFraction(fraction: Float) {
-        _uiState.update { it.copy(splitFraction = fraction.coerceIn(0f, 1f)) }
-        savedStateHandle["splitFraction"] = fraction
+        val f = fraction.coerceIn(0f, 1f)
+        _uiState.update { it.copy(splitFraction = f) }
+        savedStateHandle["splitFraction"] = f
+        prefs.edit().putFloat("split_fraction", f).apply()
     }
 
     fun setOrientationMode(mode: OrientationMode) {
