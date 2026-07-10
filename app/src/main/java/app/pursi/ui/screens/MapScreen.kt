@@ -23,9 +23,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -318,7 +316,6 @@ fun MapScreen(
     var showAlgaeReport by remember { mutableStateOf(false) }
     var algaeReportLocation by remember { mutableStateOf<LatLng?>(null) }
 
-    var pendingLongPress by remember { mutableStateOf<LatLng?>(null) }
     val navState by mapViewModel.navigationState.collectAsStateWithLifecycle()
 
     var measureMode by rememberSaveable { mutableStateOf(false) }
@@ -557,7 +554,7 @@ fun MapScreen(
                     mapViewModel.fetchVesselMetadata(mmsi)
                 },
                 onLongPress = { latlng ->
-                    pendingLongPress = latlng
+                    routeWaypoints = routeWaypoints + latlng
                 },
                 onTwoFingerMeasure = { p1, p2 ->
                     val d = app.pursi.location.SpeedCalculator.distanceBetween(
@@ -1213,48 +1210,6 @@ fun MapScreen(
                     }
                 )
             }
-        }
-
-        // ── Long-press navigation options ──
-        pendingLongPress?.let { pressPoint ->
-            val distText = location?.let { loc ->
-                val d = app.pursi.location.SpeedCalculator.distanceNm(
-                    loc.latitude, loc.longitude,
-                    pressPoint.latitude, pressPoint.longitude
-                )
-                "%.2f nm".format(d)
-            }
-            androidx.compose.material3.AlertDialog(
-                onDismissRequest = { pendingLongPress = null },
-                title = { Text(stringResource(app.pursi.R.string.navigate_here_title)) },
-                text = {
-                    Column {
-                        if (distText != null) {
-                            Text(distText, style = MaterialTheme.typography.bodyMedium)
-                            Spacer(Modifier.height(8.dp))
-                        }
-                        TextButton(onClick = {
-                            pendingLongPress = null
-                            routeWaypoints = routeWaypoints + pressPoint
-                        }, modifier = Modifier.fillMaxWidth()) {
-                            Text(stringResource(app.pursi.R.string.add_to_route), modifier = Modifier.fillMaxWidth())
-                        }
-                        TextButton(onClick = {
-                            pendingLongPress = null
-                            routeWaypoints = listOf(pressPoint)
-                            mapViewModel.startNavigation(routeWaypoints)
-                        }, modifier = Modifier.fillMaxWidth()) {
-                            Text(stringResource(app.pursi.R.string.navigate_here), modifier = Modifier.fillMaxWidth())
-                        }
-                    }
-                },
-                confirmButton = {},
-                dismissButton = {
-                    TextButton(onClick = { pendingLongPress = null }) {
-                        Text(stringResource(android.R.string.cancel))
-                    }
-                }
-            )
         }
 
         CoordinateDisplay(
