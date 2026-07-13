@@ -348,16 +348,6 @@ fun PursiMapView(
                 false
             }
             map.addOnMapClickListener(vesselClickListener)
-            seamarkClickListener = MapLibreMap.OnMapClickListener { latlng ->
-                // Forward the click coordinate to the screen. The screen does the
-                // provider-aware lookup (MapViewModel.findSeamarkAt) and the OSM
-                // fallback, then either shows a seamark popup or runs the bare-map
-                // click logic (mock location, measure mode, clear popup). Consume
-                // the click so no other listener re-handles it.
-                currentOnSeamarkClick(latlng.latitude, latlng.longitude)
-                true
-            }
-            map.addOnMapClickListener(seamarkClickListener)
             algaeObsClickListener = MapLibreMap.OnMapClickListener { latlng ->
                 val sp = map.projection.toScreenLocation(latlng)
                 val rect = android.graphics.RectF(sp.x - 24f, sp.y - 24f, sp.x + 24f, sp.y + 24f)
@@ -372,6 +362,16 @@ fun PursiMapView(
                 false
             }
             map.addOnMapClickListener(algaeObsClickListener)
+            seamarkClickListener = MapLibreMap.OnMapClickListener { latlng ->
+                // Forward the click coordinate to the screen. The screen does the
+                // provider-aware lookup (MapViewModel.findSeamarkAt) and the OSM
+                // fallback, then either shows a seamark popup or runs the bare-map
+                // click logic (mock location, measure mode, clear popup). Consume
+                // the click so no other listener re-handles it.
+                currentOnSeamarkClick(latlng.latitude, latlng.longitude)
+                true
+            }
+            map.addOnMapClickListener(seamarkClickListener)
             map.addOnMapClickListener(clickListener)
             map.addOnCameraMoveStartedListener(cameraMoveListener)
             map.addOnCameraMoveListener(cameraMovingListener)
