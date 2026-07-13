@@ -37,6 +37,7 @@ fun TopBarOverlay(
     speedUnit: SpeedUnit,
     visibleWarnings: List<MarineWarning>,
     lightningMode: WeatherRepository.LightningMode,
+    closestStrikeKm: Float? = null,
     recordingData: RecordingData,
     mapBearing: Float,
     orientationLabel: String?,
@@ -70,8 +71,14 @@ fun TopBarOverlay(
                         colors = CardDefaults.cardColors(containerColor = Color(0xFFCC0000)),
                         shape = RoundedCornerShape(4.dp)
                     ) {
+                        val label = if (closestStrikeKm != null) {
+                            stringResource(R.string.lightning_live_with_distance,
+                                stringResource(R.string.lightning_live_label), closestStrikeKm)
+                        } else {
+                            stringResource(R.string.lightning_live_label)
+                        }
                         Text(
-                            "⚡ ${stringResource(R.string.lightning_live_label)}",
+                            "⚡ $label",
                             style = MaterialTheme.typography.labelSmall,
                             fontWeight = FontWeight.Bold,
                             color = Color.White,

@@ -166,6 +166,16 @@ fun MapScreen(
     val warnings by mapViewModel.warnings.collectAsStateWithLifecycle()
     val lightningStrikes by mapViewModel.lightning.collectAsStateWithLifecycle()
     val lightningMode by mapViewModel.lightningMode.collectAsStateWithLifecycle()
+    val closestStrikeKm: Float? = remember(lightningStrikes, location) {
+        val loc = location ?: return@remember null
+        val nowSec = System.currentTimeMillis() / 1000L
+        lightningStrikes
+            .filter { it.epochTimestamp > 0 && (nowSec - it.epochTimestamp) <= 15L * 60L }
+            .minByOrNull {
+                app.pursi.location.SpeedCalculator.distanceBetween(loc.latitude, loc.longitude, it.latitude, it.longitude)
+            }
+            ?.let { (app.pursi.location.SpeedCalculator.distanceBetween(loc.latitude, loc.longitude, it.latitude, it.longitude) / 1000.0).toFloat() }
+    }
     val vessels by mapViewModel.vessels.collectAsStateWithLifecycle()
     val aisMetadata by mapViewModel.aisMetadata.collectAsStateWithLifecycle()
     val uiState by mapViewModel.uiState.collectAsStateWithLifecycle()
@@ -527,6 +537,7 @@ fun MapScreen(
             speedUnit = speedUnit,
             visibleWarnings = relevantWarnings,
             lightningMode = lightningMode,
+            closestStrikeKm = closestStrikeKm,
             recordingData = RecordingData(isRecording, recordingDistanceNm, recordingElapsed),
             mapBearing = mapBearing,
             orientationLabel = orientationLabel,
