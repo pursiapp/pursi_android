@@ -160,6 +160,7 @@
     <string name="weather_overlays_title">Sään karttakerrokset</string>
     <string name="lightning_overlay">Salamaniskut</string>
     <string name="lightning_live_label">UKKONEN</string>
+    <string name="lightning_live_with_distance">%1$s · %2$.1f km</string>
     <string name="lightning_overlay_desc">Näytä viimeaikaiset salamaniskut kartalla</string>
     <string name="warnings_overlay">Säävaroitukset</string>
     <string name="warnings_overlay_desc">Näytä varoitusalueet värikoodattuina kartalla</string>
