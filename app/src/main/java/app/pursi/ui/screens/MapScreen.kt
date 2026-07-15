@@ -251,8 +251,8 @@ fun MapScreen(
             while (true) {
                 recordingElapsed = ((System.currentTimeMillis() - recordingStartTime) / 1000).toInt()
                 kotlinx.coroutines.delay(1000L)
-            }
-        } else {
+                }
+            } else {
             recordingElapsed = 0
             recordingStartTime = 0L
         }
@@ -640,6 +640,29 @@ fun MapScreen(
                 val tmpZl = zoomToBoatLevel; zoomToBoatLevel = pane2ZoomToBoatLevel; pane2ZoomToBoatLevel = tmpZl
             }
 
+            // Per-pane orientation labels in split mode
+            val paneAOrientationLabelText = when (paneALayerState.orientationMode) {
+                OrientationMode.NORTH_UP -> stringResource(app.pursi.R.string.nav_north_up)
+                OrientationMode.COURSE_UP -> stringResource(app.pursi.R.string.nav_course_up)
+            }
+            var paneAOrientationLabel by remember { mutableStateOf<String?>(null) }
+            LaunchedEffect(paneALayerState.orientationMode) {
+                paneAOrientationLabel = paneAOrientationLabelText
+                kotlinx.coroutines.delay(2000)
+                if (paneAOrientationLabel != null) paneAOrientationLabel = null
+            }
+
+            val paneBOrientationLabelText = when (paneBLayerState.orientationMode) {
+                OrientationMode.NORTH_UP -> stringResource(app.pursi.R.string.nav_north_up)
+                OrientationMode.COURSE_UP -> stringResource(app.pursi.R.string.nav_course_up)
+            }
+            var paneBOrientationLabel by remember { mutableStateOf<String?>(null) }
+            LaunchedEffect(paneBLayerState.orientationMode) {
+                paneBOrientationLabel = paneBOrientationLabelText
+                kotlinx.coroutines.delay(2000)
+                if (paneBOrientationLabel != null) paneBOrientationLabel = null
+            }
+
             if (isCollapsed) {
                 Box(Modifier.fillMaxSize()) {
                     if (paneACollapsed) {
@@ -650,7 +673,7 @@ fun MapScreen(
                                     zoomToBoatTrigger = pane2ZoomToBoatTrigger,
                                     zoomToBoatLevel = pane2ZoomToBoatLevel,
                                     followMode = uiState.followMode,
-                                    orientationMode = uiState.orientationMode,
+                                    orientationMode = paneBLayerState.orientationMode,
                                     initialCamLat = paneBInitialCam.first,
                                     initialCamLon = paneBInitialCam.second,
                                     initialCamZoom = paneBInitialCam.third,
@@ -661,6 +684,7 @@ fun MapScreen(
                             )
                             PaneControls(
                                 paneBearing = pane2Bearing,
+                                orientationLabel = paneBOrientationLabel,
                                 onZoomIn = {
                                     pane2ZoomToBoatLevel = (pane2ZoomToBoatLevel + 0.5f).coerceAtMost(18f)
                                     pane2ZoomToBoatTrigger++
@@ -673,7 +697,7 @@ fun MapScreen(
                                     mapViewModel.centerOnLocation()
                                     pane2CenterTrigger++
                                 },
-                                onCompassClick = { mapViewModel.cycleOrientationMode() },
+                                onCompassClick = { mapViewModel.cyclePaneOrientationMode("b") },
                                 onLayersToggle = { layersTargetPane = false },
                                 modifier = Modifier.fillMaxSize()
                             )
@@ -686,7 +710,7 @@ fun MapScreen(
                                     zoomToBoatTrigger = zoomToBoatTrigger,
                                     zoomToBoatLevel = zoomToBoatLevel,
                                     followMode = uiState.followMode,
-                                    orientationMode = uiState.orientationMode,
+                                    orientationMode = paneALayerState.orientationMode,
                                     initialCamLat = paneAInitialCam.first,
                                     initialCamLon = paneAInitialCam.second,
                                     initialCamZoom = paneAInitialCam.third,
@@ -697,6 +721,7 @@ fun MapScreen(
                             )
                             PaneControls(
                                 paneBearing = mapBearing,
+                                orientationLabel = paneAOrientationLabel,
                                 onZoomIn = {
                                     zoomToBoatLevel = (currentZoom.toFloat() + 0.5f).coerceAtMost(18f)
                                     zoomToBoatTrigger++
@@ -709,7 +734,7 @@ fun MapScreen(
                                     mapViewModel.centerOnLocation()
                                     centerTrigger++
                                 },
-                                onCompassClick = { mapViewModel.cycleOrientationMode() },
+                                onCompassClick = { mapViewModel.cyclePaneOrientationMode("a") },
                                 onLayersToggle = { layersTargetPane = true },
                                 modifier = Modifier.fillMaxSize()
                             )
@@ -744,7 +769,7 @@ fun MapScreen(
                                     zoomToBoatTrigger = zoomToBoatTrigger,
                                     zoomToBoatLevel = zoomToBoatLevel,
                                     followMode = uiState.followMode,
-                                    orientationMode = uiState.orientationMode,
+                                    orientationMode = paneALayerState.orientationMode,
                                     initialCamLat = paneAInitialCam.first,
                                     initialCamLon = paneAInitialCam.second,
                                     initialCamZoom = paneAInitialCam.third,
@@ -755,6 +780,7 @@ fun MapScreen(
                             )
                             PaneControls(
                                 paneBearing = mapBearing,
+                                orientationLabel = paneAOrientationLabel,
                                 onZoomIn = {
                                     zoomToBoatLevel = (currentZoom.toFloat() + 0.5f).coerceAtMost(18f)
                                     zoomToBoatTrigger++
@@ -767,7 +793,7 @@ fun MapScreen(
                                     mapViewModel.centerOnLocation()
                                     centerTrigger++
                                 },
-                                onCompassClick = { mapViewModel.cycleOrientationMode() },
+                                onCompassClick = { mapViewModel.cyclePaneOrientationMode("a") },
                                 onLayersToggle = { layersTargetPane = true },
                                 modifier = Modifier.fillMaxSize()
                             )
@@ -789,7 +815,7 @@ fun MapScreen(
                                     zoomToBoatTrigger = pane2ZoomToBoatTrigger,
                                     zoomToBoatLevel = pane2ZoomToBoatLevel,
                                     followMode = uiState.followMode,
-                                    orientationMode = uiState.orientationMode,
+                                    orientationMode = paneBLayerState.orientationMode,
                                     initialCamLat = paneBInitialCam.first,
                                     initialCamLon = paneBInitialCam.second,
                                     initialCamZoom = paneBInitialCam.third,
@@ -800,6 +826,7 @@ fun MapScreen(
                             )
                             PaneControls(
                                 paneBearing = pane2Bearing,
+                                orientationLabel = paneBOrientationLabel,
                                 onZoomIn = {
                                     pane2ZoomToBoatLevel = (pane2ZoomToBoatLevel + 0.5f).coerceAtMost(18f)
                                     pane2ZoomToBoatTrigger++
@@ -812,7 +839,7 @@ fun MapScreen(
                                     mapViewModel.centerOnLocation()
                                     pane2CenterTrigger++
                                 },
-                                onCompassClick = { mapViewModel.cycleOrientationMode() },
+                                onCompassClick = { mapViewModel.cyclePaneOrientationMode("b") },
                                 onLayersToggle = { layersTargetPane = false },
                                 modifier = Modifier.fillMaxSize()
                             )
@@ -820,50 +847,51 @@ fun MapScreen(
                     }
                 }
             } else {
-                var colHeightPx by remember { mutableStateOf(0f) }
-                Column(
-                    Modifier
-                        .fillMaxSize()
-                        .onSizeChanged { colHeightPx = it.height.toFloat() }
-                ) {
-                    Box(Modifier.weight(animFraction.coerceAtLeast(0.001f)).fillMaxWidth()) {
-                        Box(Modifier.fillMaxSize()) {
-                            mapPaneParams(
-                                MapPaneState(
-                                    centerTrigger = centerTrigger,
-                                    zoomToBoatTrigger = zoomToBoatTrigger,
-                                    zoomToBoatLevel = zoomToBoatLevel,
-                                    followMode = uiState.followMode,
-                                    orientationMode = uiState.orientationMode,
-                                    initialCamLat = paneAInitialCam.first,
-                                    initialCamLon = paneAInitialCam.second,
-                                    initialCamZoom = paneAInitialCam.third,
-                                    paneLayerState = paneALayerState,
-                                ),
-                                { mapBearing = it },
-                                { lat, lon, zoom -> mapViewModel.setPaneCamera("a", lat, lon, zoom) }
-                            )
-                            PaneControls(
-                                paneBearing = mapBearing,
-                                onZoomIn = {
-                                    zoomToBoatLevel = (currentZoom.toFloat() + 0.5f).coerceAtMost(18f)
-                                    zoomToBoatTrigger++
-                                },
-                                onZoomOut = {
-                                    zoomToBoatLevel = (currentZoom.toFloat() - 0.5f).coerceAtLeast(4f)
-                                    zoomToBoatTrigger++
-                                },
-                                onCenterLocation = {
-                                    mapViewModel.centerOnLocation()
-                                    centerTrigger++
-                                },
-                                onCompassClick = { mapViewModel.cycleOrientationMode() },
-                                onLayersToggle = { layersTargetPane = true },
-                                modifier = Modifier.fillMaxSize()
-                            )
+                    var colHeightPx by remember { mutableStateOf(0f) }
+                    Column(
+                        Modifier
+                            .fillMaxSize()
+                            .onSizeChanged { colHeightPx = it.height.toFloat() }
+                    ) {
+                        Box(Modifier.weight(animFraction.coerceAtLeast(0.001f)).fillMaxWidth()) {
+                            Box(Modifier.fillMaxSize()) {
+                                mapPaneParams(
+                                    MapPaneState(
+                                        centerTrigger = centerTrigger,
+                                        zoomToBoatTrigger = zoomToBoatTrigger,
+                                        zoomToBoatLevel = zoomToBoatLevel,
+                                        followMode = uiState.followMode,
+                                        orientationMode = paneALayerState.orientationMode,
+                                        initialCamLat = paneAInitialCam.first,
+                                        initialCamLon = paneAInitialCam.second,
+                                        initialCamZoom = paneAInitialCam.third,
+                                        paneLayerState = paneALayerState,
+                                    ),
+                                    { mapBearing = it },
+                                    { lat, lon, zoom -> mapViewModel.setPaneCamera("a", lat, lon, zoom) }
+                                )
+                                PaneControls(
+                                    paneBearing = mapBearing,
+                                    orientationLabel = paneAOrientationLabel,
+                                    onZoomIn = {
+                                        zoomToBoatLevel = (currentZoom.toFloat() + 0.5f).coerceAtMost(18f)
+                                        zoomToBoatTrigger++
+                                    },
+                                    onZoomOut = {
+                                        zoomToBoatLevel = (currentZoom.toFloat() - 0.5f).coerceAtLeast(4f)
+                                        zoomToBoatTrigger++
+                                    },
+                                    onCenterLocation = {
+                                        mapViewModel.centerOnLocation()
+                                        centerTrigger++
+                                    },
+                                    onCompassClick = { mapViewModel.cyclePaneOrientationMode("a") },
+                                    onLayersToggle = { layersTargetPane = true },
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            }
                         }
-                    }
-                    SplitterHandle(
+                        SplitterHandle(
                         orientation = orientation,
                         splitFraction = fraction,
                         parentSizePx = colHeightPx,
@@ -879,7 +907,7 @@ fun MapScreen(
                                     zoomToBoatTrigger = pane2ZoomToBoatTrigger,
                                     zoomToBoatLevel = pane2ZoomToBoatLevel,
                                     followMode = uiState.followMode,
-                                    orientationMode = uiState.orientationMode,
+                                    orientationMode = paneBLayerState.orientationMode,
                                     initialCamLat = paneBInitialCam.first,
                                     initialCamLon = paneBInitialCam.second,
                                     initialCamZoom = paneBInitialCam.third,
@@ -890,6 +918,7 @@ fun MapScreen(
                             )
                             PaneControls(
                                 paneBearing = pane2Bearing,
+                                orientationLabel = paneBOrientationLabel,
                                 onZoomIn = {
                                     pane2ZoomToBoatLevel = (pane2ZoomToBoatLevel + 0.5f).coerceAtMost(18f)
                                     pane2ZoomToBoatTrigger++
@@ -902,7 +931,7 @@ fun MapScreen(
                                     mapViewModel.centerOnLocation()
                                     pane2CenterTrigger++
                                 },
-                                onCompassClick = { mapViewModel.cycleOrientationMode() },
+                                onCompassClick = { mapViewModel.cyclePaneOrientationMode("b") },
                                 onLayersToggle = { layersTargetPane = false },
                                 modifier = Modifier.fillMaxSize()
                             )

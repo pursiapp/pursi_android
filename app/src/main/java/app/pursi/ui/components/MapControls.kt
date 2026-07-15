@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.FiberManualRecord
@@ -21,6 +22,8 @@ import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Thunderstorm
 import androidx.compose.material.icons.filled.ViewColumn
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SmallFloatingActionButton
@@ -31,6 +34,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import app.pursi.ui.viewmodel.FollowMode
 import app.pursi.weather.WeatherUnitPrefs
@@ -197,6 +201,7 @@ fun MapControls(
 @Composable
 fun PaneControls(
     paneBearing: Float,
+    orientationLabel: String? = null,
     onZoomIn: () -> Unit,
     onZoomOut: () -> Unit,
     onCenterLocation: () -> Unit,
@@ -205,14 +210,30 @@ fun PaneControls(
     modifier: Modifier = Modifier,
 ) {
     Box(modifier = modifier) {
-        CompassRose(
-            mapBearing = paneBearing,
-            onClick = onCompassClick,
+        Column(
             modifier = Modifier
                 .align(Alignment.TopEnd)
-                .padding(4.dp)
-                .size(40.dp)
-        )
+                .padding(4.dp),
+            horizontalAlignment = Alignment.End,
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            CompassRose(
+                mapBearing = paneBearing,
+                onClick = onCompassClick,
+                modifier = Modifier.size(40.dp)
+            )
+            orientationLabel?.let { label ->
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f)),
+                    shape = RoundedCornerShape(4.dp)
+                ) {
+                    Text(label,
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
+                }
+            }
+        }
 
         Column(
             modifier = Modifier

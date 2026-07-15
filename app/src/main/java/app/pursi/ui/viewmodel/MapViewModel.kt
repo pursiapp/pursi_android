@@ -1023,6 +1023,31 @@ class MapViewModel @Inject constructor(
         savedStateHandle["orientationMode"] = _uiState.value.orientationMode
     }
 
+    fun cyclePaneOrientationMode(letter: String) {
+        val flow = when (letter) {
+            "a" -> _paneALayerState
+            "b" -> _paneBLayerState
+            else -> return
+        }
+        flow.update { state ->
+            state.copy(orientationMode = when (state.orientationMode) {
+                OrientationMode.NORTH_UP -> OrientationMode.COURSE_UP
+                OrientationMode.COURSE_UP -> OrientationMode.NORTH_UP
+            })
+        }
+        persistPaneLayerState(letter, flow.value)
+    }
+
+    fun setPaneOrientationMode(letter: String, mode: OrientationMode) {
+        val flow = when (letter) {
+            "a" -> _paneALayerState
+            "b" -> _paneBLayerState
+            else -> return
+        }
+        flow.update { state -> state.copy(orientationMode = mode) }
+        persistPaneLayerState(letter, flow.value)
+    }
+
     fun setNightMode(mode: NightMode) {
         android.util.Log.d("PursiMap", "setNightMode: $mode")
         _nightMode.value = mode

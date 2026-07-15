@@ -18,6 +18,7 @@ data class PaneLayerState(
     val navmarkSize: NavmarkSize = NavmarkSize.MEDIUM,
     val boatIconSize: BoatIconSize = BoatIconSize.MEDIUM,
     val boatIconColor: String = "#1976D2",
+    val orientationMode: OrientationMode = OrientationMode.COURSE_UP,
 ) {
     fun toJson(): String = org.json.JSONObject().apply {
         put("chartMode", chartMode.name)
@@ -37,6 +38,7 @@ data class PaneLayerState(
         put("navmarkSize", navmarkSize.name)
         put("boatIconSize", boatIconSize.name)
         put("boatIconColor", boatIconColor)
+        put("orientationMode", orientationMode.name)
     }.toString()
 
     companion object {
@@ -61,7 +63,8 @@ data class PaneLayerState(
                     chartOpacity = obj.optDouble("chartOpacity", 1.0).toFloat(),
                     navmarkSize = tryOr { NavmarkSize.valueOf(obj.optString("navmarkSize", NavmarkSize.MEDIUM.name)) } ?: NavmarkSize.MEDIUM,
                     boatIconSize = tryOr { BoatIconSize.valueOf(obj.optString("boatIconSize", BoatIconSize.MEDIUM.name)) } ?: BoatIconSize.MEDIUM,
-                    boatIconColor = obj.optString("boatIconColor", "#1976D2")
+                    boatIconColor = obj.optString("boatIconColor", "#1976D2"),
+                    orientationMode = tryOr { OrientationMode.valueOf(obj.optString("orientationMode", OrientationMode.COURSE_UP.name)) } ?: OrientationMode.COURSE_UP,
                 )
             } catch (_: Exception) {
                 PaneLayerState()
@@ -86,6 +89,7 @@ data class PaneLayerState(
             navmarkSize = state.navmarkSize,
             boatIconSize = state.boatIconSize,
             boatIconColor = state.boatIconColor,
+            orientationMode = state.orientationMode,
         )
     }
 }
