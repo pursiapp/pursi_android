@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -31,7 +32,12 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -321,6 +327,9 @@ fun MapScreen(
     var routeWaypoints by remember { mutableStateOf<List<LatLng>>(emptyList()) }
     var showRouteSaveDialog by rememberSaveable { mutableStateOf(false) }
     var routeName by rememberSaveable { mutableStateOf("") }
+    var routeCardDragX by rememberSaveable { mutableStateOf(0f) }
+    var routeCardDragY by rememberSaveable { mutableStateOf(0f) }
+    var dragWaypointIndex by remember { mutableStateOf<Int?>(null) }
     var selectedVesselMmsi by remember { mutableStateOf<Int?>(null) }
 
     var showAlgaeReport by remember { mutableStateOf(false) }
@@ -564,7 +573,10 @@ fun MapScreen(
                     mapViewModel.fetchVesselMetadata(mmsi)
                 },
                 onLongPress = { latlng ->
-                    if (!navState.isActive) {
+                    if (navState.isActive) {
+                        val idx = (navState.currentIndex + 1).coerceAtMost(routeWaypoints.size)
+                        routeWaypoints = routeWaypoints.toMutableList().also { it.add(idx, latlng) }
+                    } else {
                         routeWaypoints = routeWaypoints + latlng
                     }
                 },
@@ -580,7 +592,17 @@ fun MapScreen(
                     measureActive = false
                 },
                 navigationState = navState,
-                lastLocation = location?.let { LatLng(it.latitude, it.longitude) }
+                lastLocation = location?.let { LatLng(it.latitude, it.longitude) },
+                dragWaypointIndex = dragWaypointIndex,
+                onWaypointDragStart = { idx, _, _ ->
+                    dragWaypointIndex = idx
+                },
+                onWaypointDragMove = { idx, lat, lon ->
+                    routeWaypoints = routeWaypoints.toMutableList().also { it[idx] = LatLng(lat, lon) }
+                },
+                onWaypointDragEnd = {
+                    dragWaypointIndex = null
+                }
             )
         }
 
@@ -1079,10 +1101,25 @@ fun MapScreen(
             val showReportButton = routeWaypoints.isNotEmpty() &&
                 lastWp != null &&
                 Regions.FINLAND.contains(lastWp.latitude, lastWp.longitude)
+            val configuration = LocalConfiguration.current
+            val density = LocalDensity.current
+            val screenW = with(density) { configuration.screenWidthDp.dp.toPx() }
+            val screenH = with(density) { configuration.screenHeightDp.dp.toPx() }
+            val bottomPad = with(density) { bottomInsetPx.toPx() }
             RouteActionCard(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(bottom = if (navState.isActive) bottomInsetPx + 16.dp else bottomInsetPx + 80.dp),
+                    .offset { IntOffset(routeCardDragX.toInt(), routeCardDragY.toInt()) }
+                    .padding(bottom = 0.dp)
+                    .pointerInput(Unit) {
+                        detectDragGestures { change, dragAmount ->
+                            change.consume()
+                            routeCardDragX = (routeCardDragX + dragAmount.x)
+                                .coerceIn(-screenW * 0.45f, screenW * 0.45f)
+                            routeCardDragY = (routeCardDragY + dragAmount.y)
+                                .coerceIn(-screenH + bottomPad, screenH * 0.45f)
+                        }
+                    },
                 waypoints = activeWps,
                 defaultBoat = defaultBoat,
                 isPlanningMode = routeWaypoints.isNotEmpty(),

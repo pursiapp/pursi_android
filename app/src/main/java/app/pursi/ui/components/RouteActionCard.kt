@@ -1,13 +1,14 @@
 package app.pursi.ui.components
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -70,50 +71,55 @@ fun RouteActionCard(
 
     Card(
         modifier = modifier
-            .widthIn(max = if (navigationState.isActive) 200.dp else 340.dp),
+            .widthIn(max = if (navigationState.isActive) 280.dp else 340.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f)),
         shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp)
     ) {
-        Column(Modifier.padding(horizontal = 10.dp, vertical = if (navigationState.isActive) 2.dp else 6.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    if (navigationState.isActive) {
-                        val wp = if (navigationState.waypoints.isNotEmpty())
-                            "WP ${navigationState.currentIndex + 1}/${navigationState.waypoints.size}" else ""
-                        Text(
-                            "${"%.1f".format(navigationState.distanceToWpNm)} nm · $wp",
-                            style = MaterialTheme.typography.bodySmall,
-                            fontWeight = FontWeight.Medium
-                        )
-                    } else if (label != null) {
-                        Text(
-                            label,
-                            style = MaterialTheme.typography.bodySmall,
-                            fontWeight = FontWeight.Medium
-                        )
-                        Text(
-                            "${"%.1f".format(distNm)} nm · ${waypoints.size} ${stringResource(R.string.waypoints)}",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                        )
-                    } else {
-                        Text(
-                            "${stringResource(R.string.route_pts, waypoints.size)} · ${"%.1f".format(distNm)} nm",
-                            style = MaterialTheme.typography.bodySmall,
-                            fontWeight = FontWeight.Medium
-                        )
-                    }
-                    if (!navigationState.isActive) {
-                        eta?.let { e ->
-                            Text(
-                                RoutePlanner.formatTimeEstimate(e),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                            )
-                        }
-                    }
+        Column(Modifier.padding(horizontal = 10.dp, vertical = 4.dp)) {
+            if (navigationState.isActive) {
+                val wp = if (navigationState.waypoints.isNotEmpty())
+                    "WP ${navigationState.currentIndex + 1}/${navigationState.waypoints.size}" else ""
+                Text(
+                    "${"%.1f".format(navigationState.distanceToWpNm)} nm · $wp",
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.Medium
+                )
+                Text(
+                    "ETA ${RoutePlanner.formatTimeEstimate(navigationState.etaHours)} · ${"%.1f".format(navigationState.totalDistanceRemainingNm)} nm",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                )
+            } else if (label != null) {
+                Text(
+                    label,
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.Medium
+                )
+                Text(
+                    "${"%.1f".format(distNm)} nm · ${waypoints.size} ${stringResource(R.string.waypoints)}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                )
+            } else {
+                Text(
+                    "${stringResource(R.string.route_pts, waypoints.size)} · ${"%.1f".format(distNm)} nm",
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+            if (!navigationState.isActive) {
+                eta?.let { e ->
+                    Text(
+                        RoutePlanner.formatTimeEstimate(e),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                    )
                 }
-                Spacer(Modifier.width(8.dp))
+            }
+
+            Spacer(Modifier.height(2.dp))
+
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 if (navigationState.isActive) {
                     val navWps = navigationState.waypoints
                     val curIdx = navigationState.currentIndex
@@ -154,11 +160,11 @@ fun RouteActionCard(
                     }
                 }
             }
+
             if (showReportButton && !navigationState.isActive) {
-                Spacer(Modifier.height(2.dp))
                 TextButton(
                     onClick = onReportObservation,
-                    contentPadding = PaddingValues(horizontal = 0.dp, vertical = 2.dp)
+                    contentPadding = PaddingValues(horizontal = 0.dp, vertical = 0.dp)
                 ) {
                     Text(
                         "+ " + stringResource(R.string.report_observation),

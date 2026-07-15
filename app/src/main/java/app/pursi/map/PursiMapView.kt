@@ -150,7 +150,11 @@ fun PursiMapView(
     showSectors: Boolean = true,
     viewportBounds: BoundingBox? = null,
     navigationState: NavigationState = NavigationState(),
-    lastLocation: LatLng? = null
+    lastLocation: LatLng? = null,
+    dragWaypointIndex: Int? = null,
+    onWaypointDragStart: (Int, Double, Double) -> Unit = { _, _, _ -> },
+    onWaypointDragMove: (Int, Double, Double) -> Unit = { _, _, _ -> },
+    onWaypointDragEnd: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val mapView = remember {
@@ -177,6 +181,9 @@ fun PursiMapView(
     val currentOnVesselClick by rememberUpdatedState(onVesselClick)
     val currentOnSeamarkClick by rememberUpdatedState(onSeamarkClick)
     val currentOnAlgaeObservationClick by rememberUpdatedState(onAlgaeObservationClick)
+    val currentOnWaypointDragStart by rememberUpdatedState(onWaypointDragStart)
+    val currentOnWaypointDragMove by rememberUpdatedState(onWaypointDragMove)
+    val currentOnWaypointDragEnd by rememberUpdatedState(onWaypointDragEnd)
     val currentRadarProvider by rememberUpdatedState(radarProvider)
     val obsRadarOpacity by rememberUpdatedState(radarOpacity)
     val obsLocation by rememberUpdatedState(location)
@@ -208,7 +215,23 @@ fun PursiMapView(
         val handler = Handler(Looper.getMainLooper())
         MapViewRegistry.register(mapView)
 
+        var dragWaypointIdx: Int? = null
+
         val longClickListener = MapLibreMap.OnMapLongClickListener { latlng ->
+            val m = currentMap.value
+            if (m != null) {
+                val sp = m.projection.toScreenLocation(latlng)
+                val f = m.queryRenderedFeatures(sp, "layer-route-dots")
+                if (f.isNotEmpty()) {
+                    val idx = f.first().getNumberProperty("order")?.toInt() ?: -1
+                    if (idx >= 0) {
+                        dragWaypointIdx = idx
+                        m.uiSettings.isScrollGesturesEnabled = false
+                        currentOnWaypointDragStart(idx, latlng.latitude, latlng.longitude)
+                        return@OnMapLongClickListener true
+                    }
+                }
+            }
             currentOnLongPress(LatLng(latlng.latitude, latlng.longitude))
             true
         }
@@ -267,6 +290,25 @@ fun PursiMapView(
             var inMeasureMode = false
 
             mapView.setOnTouchListener { _, event ->
+                val dragIdx = dragWaypointIdx
+                if (dragIdx != null) {
+                    when (event.actionMasked) {
+                        MotionEvent.ACTION_MOVE -> {
+                            val m = currentMap.value
+                            if (m != null) {
+                                val screenPoint = PointF(event.x, event.y)
+                                val latlng = m.projection.fromScreenLocation(screenPoint)
+                                currentOnWaypointDragMove(dragIdx, latlng.latitude, latlng.longitude)
+                            }
+                        }
+                        MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                            dragWaypointIdx = null
+                            map.uiSettings.isScrollGesturesEnabled = true
+                            currentOnWaypointDragEnd()
+                        }
+                    }
+                }
+
                 when (event.actionMasked) {
                     MotionEvent.ACTION_DOWN -> {
                         if (inMeasureMode) {
@@ -657,7 +699,7 @@ fun PursiMapView(
 
     LaunchedEffect(mapReadyToken, routeWaypoints) {
         val map = currentMap.value as? MapLibreMap ?: return@LaunchedEffect
-        map.getStyle { style -> RouteOverlay.updatePlanning(style, routeWaypoints) }
+        map.getStyle { style -> RouteOverlay.updatePlanning(style, routeWaypoints, dragWaypointIndex) }
     }
 
     LaunchedEffect(mapReadyToken, measureLinePoints) {
