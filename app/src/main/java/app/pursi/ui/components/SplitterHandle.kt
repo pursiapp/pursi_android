@@ -68,7 +68,7 @@ fun SplitterHandle(
         }
     }
 
-    val handleThickness = 12.dp
+    val hitAreaThickness = 12.dp
     val grabDotColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
 
     // Wrap values in rememberUpdatedState so gesture lambdas always see the latest values
@@ -80,27 +80,13 @@ fun SplitterHandle(
     Box(
         modifier = modifier
             .then(
-                if (isVertical) Modifier.fillMaxHeight().width(handleThickness)
-                else Modifier.fillMaxWidth().height(handleThickness)
+                if (isVertical) Modifier.fillMaxHeight().width(hitAreaThickness)
+                else Modifier.fillMaxWidth().height(hitAreaThickness)
             )
             .background(
                 if (isDragging) MaterialTheme.colorScheme.surfaceVariant
                 else Color.Transparent
             )
-            .pointerInput(Unit) {
-                detectTapGestures(
-                    onTap = {
-                        val newFraction = when {
-                            currentSplitFraction < 0.4f -> 0.5f
-                            currentSplitFraction < 0.6f -> 0.7f
-                            else -> 0.3f
-                        }
-                        currentOnFractionChange(newFraction)
-                        currentOnFractionCommit(newFraction)
-                    },
-                    onLongPress = { currentOnSwapPanes() }
-                )
-            }
             .pointerInput(parentSizePx) {
                 detectDragGestures(
                     onDragStart = {
@@ -130,6 +116,20 @@ fun SplitterHandle(
                             currentOnFractionChange(currentSplitFraction + delta)
                         }
                     }
+                )
+            }
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onTap = {
+                        val newFraction = when {
+                            currentSplitFraction < 0.4f -> 0.5f
+                            currentSplitFraction < 0.6f -> 0.7f
+                            else -> 0.3f
+                        }
+                        currentOnFractionChange(newFraction)
+                        currentOnFractionCommit(newFraction)
+                    },
+                    onLongPress = { currentOnSwapPanes() }
                 )
             },
         contentAlignment = Alignment.Center
