@@ -369,4 +369,6 @@
     <string name="wind_meter_size_medium">Normal</string>
     <string name="wind_meter_size_large">Groß</string>
     <string name="split_view">Geteilte Ansicht</string>
+    <string name="prev_waypoint">Vorheriger</string>
+    <string name="next_waypoint">Nächster</string>
 </resources>

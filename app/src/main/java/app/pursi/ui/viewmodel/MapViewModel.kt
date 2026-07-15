@@ -352,6 +352,12 @@ class MapViewModel @Inject constructor(
     private val _navigationState = MutableStateFlow(NavigationState())
     val navigationState: StateFlow<NavigationState> = _navigationState.asStateFlow()
 
+    private var navHysteresisCounter = 0
+
+    companion object {
+        private const val NAV_HYSTERESIS_TICKS = 3
+    }
+
     init {
         aisRepository.setEnabled(_uiState.value.showAis)
     }
@@ -391,6 +397,8 @@ class MapViewModel @Inject constructor(
         val speedKn = currentLocation.value?.speed?.let { app.pursi.location.SpeedCalculator.metersPerSecondToKnots(it) } ?: 0f
         val etaH = if (speedKn > 0.5f) totalNm / speedKn else 0.0
 
+        navHysteresisCounter = 0
+
         _navigationState.value = NavigationState(
             isActive = true,
             waypoints = waypoints,
@@ -401,6 +409,7 @@ class MapViewModel @Inject constructor(
     }
 
     fun stopNavigation() {
+        navHysteresisCounter = 0
         _navigationState.value = NavigationState()
     }
 
@@ -410,9 +419,23 @@ class MapViewModel @Inject constructor(
 
         val boatPos = LatLng(boatLat, boatLon)
 
-        val newIndex = NavigationController.findCurrentWaypointIndex(
+        val suggestedIndex = NavigationController.findCurrentWaypointIndex(
             boatPos, boatHeading, state.waypoints, state.currentIndex
         )
+
+        val newIndex: Int
+        if (suggestedIndex > state.currentIndex) {
+            navHysteresisCounter++
+            if (navHysteresisCounter >= NAV_HYSTERESIS_TICKS) {
+                navHysteresisCounter = 0
+                newIndex = suggestedIndex
+            } else {
+                newIndex = state.currentIndex
+            }
+        } else {
+            navHysteresisCounter = 0
+            newIndex = state.currentIndex
+        }
 
         if (newIndex >= state.waypoints.size) {
             _navigationState.value = NavigationState()
@@ -454,6 +477,32 @@ class MapViewModel @Inject constructor(
             xteNm = xteNm,
             xteDirection = xteDir,
         )
+    }
+
+    fun setCurrentWaypoint(index: Int) {
+        val state = _navigationState.value
+        if (!state.isActive || state.waypoints.isEmpty()) return
+        val clamped = index.coerceIn(0, state.waypoints.size - 1)
+        navHysteresisCounter = 0
+        _navigationState.value = state.copy(currentIndex = clamped)
+        val loc = currentLocation.value
+        if (loc != null) {
+            updateNavigation(
+                loc.latitude, loc.longitude,
+                loc.bearing ?: 0f,
+                app.pursi.location.SpeedCalculator.metersPerSecondToKnots(loc.speed)
+            )
+        }
+    }
+
+    fun advanceWaypoint() {
+        val idx = _navigationState.value.currentIndex
+        setCurrentWaypoint(idx + 1)
+    }
+
+    fun previousWaypoint() {
+        val idx = _navigationState.value.currentIndex
+        setCurrentWaypoint(idx - 1)
     }
 
     fun setCameraTarget(latitude: Double, longitude: Double) {

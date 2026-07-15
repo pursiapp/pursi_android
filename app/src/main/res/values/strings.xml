@@ -381,4 +381,6 @@
     <string name="split_view">Split view</string>
     <string name="navigate">Navigate</string>
     <string name="stop_navigation">Stop</string>
+    <string name="prev_waypoint">Previous</string>
+    <string name="next_waypoint">Next</string>
 </resources>

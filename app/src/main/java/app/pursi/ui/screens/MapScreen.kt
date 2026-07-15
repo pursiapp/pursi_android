@@ -1116,6 +1116,9 @@ fun MapScreen(
                 },
                 onStopNavigate = {
                     mapViewModel.stopNavigation()
+                },
+                onNavigateWaypoint = { idx ->
+                    mapViewModel.setCurrentWaypoint(idx)
                 }
             )
         }

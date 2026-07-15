@@ -369,4 +369,6 @@
     <string name="wind_meter_size_medium">Normaalne</string>
     <string name="wind_meter_size_large">Suur</string>
     <string name="split_view">Jaga vaadet</string>
+    <string name="prev_waypoint">Eelmine</string>
+    <string name="next_waypoint">Järgmine</string>
 </resources>

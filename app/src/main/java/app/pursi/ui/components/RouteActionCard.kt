@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Navigation
@@ -113,6 +115,18 @@ fun RouteActionCard(
                 }
                 Spacer(Modifier.width(8.dp))
                 if (navigationState.isActive) {
+                    val navWps = navigationState.waypoints
+                    val curIdx = navigationState.currentIndex
+                    if (navWps.isNotEmpty() && curIdx > 0) {
+                        IconButton(onClick = { onNavigateWaypoint(curIdx - 1) }, modifier = Modifier.size(28.dp)) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.prev_waypoint), modifier = Modifier.size(20.dp))
+                        }
+                    }
+                    if (navWps.isNotEmpty() && curIdx < navWps.size - 1) {
+                        IconButton(onClick = { onNavigateWaypoint(curIdx + 1) }, modifier = Modifier.size(28.dp)) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowForward, stringResource(R.string.next_waypoint), modifier = Modifier.size(20.dp))
+                        }
+                    }
                     IconButton(onClick = onStopNavigate, modifier = Modifier.size(36.dp)) {
                         Icon(Icons.Default.Close, stringResource(R.string.stop_navigation), modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.error)
                     }
