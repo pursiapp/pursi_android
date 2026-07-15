@@ -393,7 +393,7 @@ fun PursiMapView(
             algaeObsClickListener = MapLibreMap.OnMapClickListener { latlng ->
                 val sp = map.projection.toScreenLocation(latlng)
                 val rect = android.graphics.RectF(sp.x - 24f, sp.y - 24f, sp.x + 24f, sp.y + 24f)
-                val f = map.queryRenderedFeatures(rect, "water-obs-layer-a", "water-obs-layer-b")
+                val f = map.queryRenderedFeatures(rect, "water-obs-algae-a", "water-obs-algae-b", "water-obs-temp-a", "water-obs-temp-b")
                 if (f.isNotEmpty()) {
                     val idx = f.first().getNumberProperty("obsIndex")?.toInt() ?: -1
                     if (idx >= 0) {

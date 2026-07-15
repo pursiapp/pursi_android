@@ -32,9 +32,12 @@ object WeatherOverlay {
         val layerId = "algae-satellite-layer"
 
         if (!show) {
-            OverlayUtils.safeRemoveLayers(style, layerId, "water-obs-label-b", "water-obs-label-a",
-                "water-obs-layer-b", "water-obs-layer-a")
-            OverlayUtils.safeRemoveSources(style, srcId, "water-obs-label-src-b", "water-obs-label-src-a",
+            OverlayUtils.safeRemoveLayers(style, layerId,
+                "water-obs-label-b", "water-obs-label-a",
+                "water-obs-temp-b", "water-obs-temp-a",
+                "water-obs-algae-b", "water-obs-algae-a")
+            OverlayUtils.safeRemoveSources(style, srcId,
+                "water-obs-label-src-b", "water-obs-label-src-a",
                 "water-obs-b", "water-obs-a")
             return
         }

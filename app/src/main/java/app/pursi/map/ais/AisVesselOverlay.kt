@@ -24,7 +24,9 @@ object AisVesselOverlay {
     const val L_FAST = "lv-fast"
     const val L_MOVE = "lv-move"
 
-    val ALL_LAYERS: List<String> = listOf(L_STOP, L_SAIL, L_FAST, L_MOVE)
+    private const val L_LABEL = "lv-label"
+
+    val ALL_LAYERS: List<String> = listOf(L_STOP, L_SAIL, L_FAST, L_MOVE, L_LABEL)
 
     fun update(style: Style, vessels: List<AisVessel>) {
         if (vessels.isEmpty()) { remove(style); return }
@@ -36,6 +38,7 @@ object AisVesselOverlay {
                 addNumberProperty("cog", v.cog.toDouble())
                 addNumberProperty("navStat", v.navStat.toDouble())
                 addNumberProperty("heading", if (v.heading in 0..359) v.heading.toDouble() else v.cog.toDouble())
+                addStringProperty("speedLabel", "${"%.1f".format(v.sog)} kn")
             }
         })
 
@@ -96,6 +99,24 @@ object AisVesselOverlay {
                 Expression.lt(sog, Expression.literal(15.0)),
                 Expression.neq(ns, Expression.literal(8))
             ))
+
+        // Speed labels for moving vessels
+        SymbolLayer(L_LABEL, SRC).apply {
+            setFilter(Expression.gt(sog, Expression.literal(0.5)))
+            setProperties(
+                PropertyFactory.textField(Expression.get("speedLabel")),
+                PropertyFactory.textSize(11f),
+                PropertyFactory.textColor("#FFFFFF"),
+                PropertyFactory.textHaloColor("#000000"),
+                PropertyFactory.textHaloWidth(1.5f),
+                PropertyFactory.textAnchor("bottom"),
+                PropertyFactory.textOffset(arrayOf(0f, -1.2f)),
+                PropertyFactory.textAllowOverlap(false),
+                PropertyFactory.textIgnorePlacement(false),
+                PropertyFactory.textPadding(2f)
+            )
+            setMinZoom(10f)
+        }.also { style.addLayerAbove(it, L_MOVE) }
     }
 
     fun remove(style: Style) {
