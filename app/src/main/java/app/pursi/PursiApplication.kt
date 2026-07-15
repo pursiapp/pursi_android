@@ -33,6 +33,8 @@ class PursiApplication : Application() {
         )
 
         registerActivityLifecycleCallbacks(AppLifecycleTracker(analyticsManager))
+
+        app.pursi.datasource.fi.SeaWarningsPollWorker.schedule(this)
     }
 
     override fun onTrimMemory(level: Int) {

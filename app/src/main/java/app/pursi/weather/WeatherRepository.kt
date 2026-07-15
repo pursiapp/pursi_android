@@ -240,17 +240,22 @@ class WeatherRepository @Inject constructor(
     // ── Warnings-only refresh (no GPS required) ─────────────────────────
 
     private suspend fun refreshWarningsOnly() {
-        val warningProvider = sourceResolver.warningProviderFor(60.0, 24.0)
-        if (warningProvider == null) return
+        val providers = sourceResolver.allWarningProvidersFor(60.0, 24.0)
+        if (providers.isEmpty()) return
 
         val locales = context.resources.configuration.locales
         val lang = if (locales.isEmpty()) "fi" else locales[0].language
 
-        val fetchedWarnings = withTimeoutOrNull(15_000L) {
-            warningProvider.getMarineWarnings(lang, 60.0, 24.0)
-        } ?: emptyList()
-        _warnings.value = fetchedWarnings
-        persistWarnings(fetchedWarnings)
+        val allWarnings = mutableListOf<MarineWarning>()
+        for (provider in providers) {
+            val fetched = withTimeoutOrNull(15_000L) {
+                provider.getMarineWarnings(lang, 60.0, 24.0)
+            } ?: emptyList()
+            allWarnings.addAll(fetched)
+        }
+        val sorted = sortWarnings(allWarnings, 60.0, 24.0)
+        _warnings.value = sorted
+        persistWarnings(sorted)
         prefs.edit().putLong(KEY_WARNING_TIME, System.currentTimeMillis()).apply()
     }
 
@@ -370,7 +375,7 @@ class WeatherRepository @Inject constructor(
         } else {
             primaryProvider
         }
-        val warningProvider = sourceResolver.warningProviderFor(lat, lon)
+        val warningProviders = sourceResolver.allWarningProvidersFor(lat, lon)
 
         val locales = context.resources.configuration.locales
         val lang = if (locales.isEmpty()) "fi" else locales[0].language
@@ -396,16 +401,17 @@ class WeatherRepository @Inject constructor(
             prefs.edit().putLong(KEY_CORE_TIME, now).apply()
         }
 
-        if (warningProvider != null) {
-            val fetchedWarnings = withTimeoutOrNull(15_000L) {
-                warningProvider.getMarineWarnings(lang, lat, lon)
+        val allWarnings = mutableListOf<MarineWarning>()
+        for (wp in warningProviders) {
+            val fetched = withTimeoutOrNull(15_000L) {
+                wp.getMarineWarnings(lang, lat, lon)
             } ?: emptyList()
-            _warnings.value = fetchedWarnings
-            // Always persist (including []) so loadCachedWarnings() on cold start
-            // can't restore expired warnings when FMI has cleared them.
-            persistWarnings(fetchedWarnings)
-            prefs.edit().putLong(KEY_WARNING_TIME, now).apply()
+            allWarnings.addAll(fetched)
         }
+        val sortedWarnings = sortWarnings(allWarnings, lat, lon)
+        _warnings.value = sortedWarnings
+        persistWarnings(sortedWarnings)
+        prefs.edit().putLong(KEY_WARNING_TIME, now).apply()
 
         lastFetchLat = lat
         lastFetchLon = lon
@@ -458,11 +464,40 @@ class WeatherRepository @Inject constructor(
         }
     }
 
+    private fun sortWarnings(warnings: List<MarineWarning>, refLat: Double, refLon: Double): List<MarineWarning> {
+        val weather = warnings.filter { it.source != "Fintraffic" }
+            .sortedByDescending { severityRank(it.severity) }
+        val restrictions = warnings.filter { it.source == "Fintraffic" }
+            .sortedBy { distKm(it.centroidLat, it.centroidLon, refLat, refLon) }
+        return weather + restrictions
+    }
+
+    private fun severityRank(severity: String): Int = when (severity) {
+        "Extreme" -> 4
+        "Severe" -> 3
+        "Moderate" -> 2
+        "Minor" -> 1
+        else -> 0
+    }
+
+    private fun distKm(lat1: Double?, lon1: Double?, refLat: Double, refLon: Double): Double {
+        if (lat1 == null || lon1 == null) return Double.MAX_VALUE
+        val R = 6371.0
+        val dLat = Math.toRadians(lat1 - refLat)
+        val dLon = Math.toRadians(lon1 - refLon)
+        val a = Math.sin(dLat / 2.0).pow(2.0) +
+                Math.cos(Math.toRadians(refLat)) * Math.cos(Math.toRadians(lat1)) *
+                Math.sin(dLon / 2.0).pow(2.0)
+        return R * 2.0 * Math.atan2(Math.sqrt(a), Math.sqrt(1.0 - a))
+    }
+
+    private fun Double.pow(e: Double): Double = Math.pow(this, e)
+
     private fun loadCachedWarnings() {
         try {
             val serialized = prefs.getString(KEY_WARNINGS, null) ?: return
             val cached: List<MarineWarning> = json.decodeFromString(serialized)
-            _warnings.value = cached
+            _warnings.value = sortWarnings(cached, 60.0, 24.0)
         } catch (_: Exception) { }
     }
 

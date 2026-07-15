@@ -40,6 +40,9 @@ class SourceResolver(
     fun warningProviderFor(lat: Double, lon: Double): WarningProvider? =
         resolveBest(lat, lon, warningProviders, { it.coverage.contains(lat, lon) }, { it.priority })
 
+    fun allWarningProvidersFor(lat: Double, lon: Double): List<WarningProvider> =
+        resolveAll(lat, lon, warningProviders, { it.coverage.contains(lat, lon) }, { it.priority })
+
     fun marineFeatureProvidersFor(lat: Double, lon: Double): List<MarineFeatureProvider> =
         resolveAll(lat, lon, marineFeatureProviders, { it.coverage.contains(lat, lon) }, { it.priority })
 

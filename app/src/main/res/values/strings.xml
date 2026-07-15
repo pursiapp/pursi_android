@@ -379,6 +379,9 @@
     <string name="wind_meter_size_medium">Normal</string>
     <string name="wind_meter_size_large">Large</string>
     <string name="split_view">Split view</string>
+    <string name="warning_group_weather">Weather warnings</string>
+    <string name="warning_group_ending">Ending soon</string>
+    <string name="warning_group_other">Other warnings</string>
     <string name="navigate">Navigate</string>
     <string name="stop_navigation">Stop</string>
     <string name="prev_waypoint">Previous</string>

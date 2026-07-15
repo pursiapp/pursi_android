@@ -42,6 +42,8 @@ import app.pursi.datasource.no.NorwegianChartProvider
 import app.pursi.datasource.se.SmhiWarningProvider
 import app.pursi.data.wfs.WfsClient
 import app.pursi.weather.FmiClient
+import app.pursi.datasource.fi.FintrafficSeaWarningsClient
+import app.pursi.datasource.fi.FintrafficSeaWarningsProvider
 import okhttp3.OkHttpClient
 import javax.inject.Singleton
 
@@ -97,6 +99,11 @@ object DataSourceModule {
     @IntoSet
     fun provideSmhiWarningProvider(client: OkHttpClient): WarningProvider =
         SmhiWarningProvider(client)
+
+    @Provides
+    @IntoSet
+    fun provideFintrafficSeaWarningsProvider(client: FintrafficSeaWarningsClient): WarningProvider =
+        FintrafficSeaWarningsProvider(client)
 
     @Provides
     @IntoSet

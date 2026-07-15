@@ -377,6 +377,9 @@
     <string name="wind_meter_size_medium">Normal</string>
     <string name="wind_meter_size_large">Stor</string>
     <string name="split_view">Dela vy</string>
+    <string name="warning_group_weather">Vädervarningar</string>
+    <string name="warning_group_ending">Slutar snart</string>
+    <string name="warning_group_other">Andra varningar</string>
     <string name="prev_waypoint">Föregående</string>
     <string name="next_waypoint">Nästa</string>
 </resources>

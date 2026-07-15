@@ -42,7 +42,12 @@ data class MarineWarning(
     val windDirectionDeg: Float? = null,
     val centroidLat: Double? = null,
     val centroidLon: Double? = null,
-    val polygonCoords: String = ""
+    val polygonCoords: String = "",
+    val source: String = "",
+    val validityStartEpochMs: Long? = null,
+    val validityEndEpochMs: Long? = null,
+    val publishedEpochMs: Long? = null,
+    val geometryType: String = ""
 )
 
 @Serializable

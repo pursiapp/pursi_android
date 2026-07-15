@@ -378,6 +378,9 @@
     <string name="wind_meter_size_medium">Normaali</string>
     <string name="wind_meter_size_large">Suuri</string>
     <string name="split_view">Näkymän jakaminen</string>
+    <string name="warning_group_weather">Säävaroitukset</string>
+    <string name="warning_group_ending">Päättymässä pian</string>
+    <string name="warning_group_other">Muut varoitukset</string>
     <string name="prev_waypoint">Edellinen</string>
     <string name="next_waypoint">Seuraava</string>
 </resources>

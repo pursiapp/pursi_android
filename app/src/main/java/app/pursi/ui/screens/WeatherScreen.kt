@@ -32,6 +32,7 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -567,36 +568,114 @@ private fun WarningsTab(warnings: List<MarineWarning>) {
             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
         return
     }
+
+    val refLat = 60.0
+    val refLon = 24.0
+
+    val weatherWarnings = remember(warnings) {
+        warnings
+            .filter { it.source != "Fintraffic" }
+            .sortedByDescending { severityRank(it.severity) }
+    }
+    val restrictionWarnings = remember(warnings) {
+        warnings
+            .filter { it.source == "Fintraffic" }
+            .sortedBy { distKm(it.centroidLat, it.centroidLon, refLat, refLon) }
+    }
+
     LazyColumn(Modifier.padding(horizontal = 16.dp)) {
-        items(warnings) { w ->
-            val warnColor = Color(warningColorHex(w.color))
-            Card(Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = warnColor.copy(alpha = 0.1f))) {
-                Column(Modifier.padding(12.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(Modifier.size(12.dp).background(warnColor, RoundedCornerShape(6.dp)))
-                        Spacer(Modifier.width(8.dp))
-                        Text(w.event, style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                    }
-                    Spacer(Modifier.height(4.dp))
-                    Text(w.areaDesc, style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
-                    Spacer(Modifier.height(4.dp))
-                    Text(w.headline, style = MaterialTheme.typography.bodyMedium)
-                    Spacer(Modifier.height(4.dp))
-                    Text(w.description, style = MaterialTheme.typography.bodySmall)
-                    if (w.windSpeedMs != null) {
-                        Spacer(modifier = Modifier.height(4.dp))
-                        val dir = w.windDirectionDeg?.let { "${windArrow(it + 180f)} ${degreesToCompass(it)}" } ?: ""
-                        Text("${stringResource(R.string.wind)}: ${"%.0f".format(w.windSpeedMs)} m/s $dir",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
-                    }
+        if (weatherWarnings.isNotEmpty()) {
+            item { SectionHeader(stringResource(R.string.warning_group_weather)) }
+            items(weatherWarnings) { w ->
+                WarningCard(w)
+                Spacer(Modifier.height(6.dp))
+            }
+        }
+
+        if (restrictionWarnings.isNotEmpty()) {
+            item { SectionHeader(stringResource(R.string.warning_group_other)) }
+            items(restrictionWarnings) { w ->
+                WarningCard(w)
+                Spacer(Modifier.height(6.dp))
+            }
+        }
+    }
+}
+
+private fun severityRank(severity: String): Int = when (severity) {
+    "Extreme" -> 4
+    "Severe" -> 3
+    "Moderate" -> 2
+    "Minor" -> 1
+    else -> 0
+}
+
+private fun distKm(lat1: Double?, lon1: Double?, refLat: Double, refLon: Double): Double {
+    if (lat1 == null || lon1 == null) return Double.MAX_VALUE
+    val R = 6371.0
+    val dLat = Math.toRadians(lat1 - refLat)
+    val dLon = Math.toRadians(lon1 - refLon)
+    val a = Math.sin(dLat / 2.0).pow(2.0) +
+            Math.cos(Math.toRadians(refLat)) * Math.cos(Math.toRadians(lat1)) *
+            Math.sin(dLon / 2.0).pow(2.0)
+    return R * 2.0 * Math.atan2(Math.sqrt(a), Math.sqrt(1.0 - a))
+}
+
+private fun Double.pow(e: Double): Double = Math.pow(this, e)
+
+@Composable
+private fun SectionHeader(title: String) {
+    Spacer(Modifier.height(8.dp))
+    Text(title, style = MaterialTheme.typography.titleSmall,
+        fontWeight = FontWeight.Bold,
+        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+    Spacer(Modifier.height(4.dp))
+}
+
+@Composable
+private fun WarningCard(w: MarineWarning) {
+    val warnColor = Color(warningColorHex(w.color))
+    val remainingText = buildTimeRemaining(w.validityEndEpochMs)
+    Card(Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = warnColor.copy(alpha = 0.1f))) {
+        Column(Modifier.padding(12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(12.dp).background(warnColor, RoundedCornerShape(6.dp)))
+                Spacer(Modifier.width(8.dp))
+                Text(w.event, style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                if (w.source.isNotEmpty()) {
+                    Text(w.source, style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f))
                 }
             }
-            Spacer(Modifier.height(6.dp))
+            Spacer(Modifier.height(4.dp))
+            if (w.areaDesc.isNotEmpty()) {
+                Text(w.areaDesc, style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                Spacer(Modifier.height(2.dp))
+            }
+            Text(w.description, style = MaterialTheme.typography.bodySmall)
+            if (remainingText.isNotEmpty() && remainingText != "Päättynyt") {
+                Spacer(Modifier.height(4.dp))
+                Text(remainingText, style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = if (w.severity == "Extreme") Color(0xFFE53935) else Color(0xFFE65100))
+            }
         }
+    }
+}
+
+private fun buildTimeRemaining(validityEndEpochMs: Long?): String {
+    if (validityEndEpochMs == null) return ""
+    val now = System.currentTimeMillis()
+    val remaining = validityEndEpochMs - now
+    return when {
+        remaining <= 0 -> ""
+        remaining < 60_000L -> "Päättyy hetkenä minä hyvänsä"
+        remaining < 3_600_000L -> "Päättyy ${remaining / 60_000L} min kuluttua"
+        remaining < 86_400_000L -> "Päättyy ${remaining / 3_600_000L} h kuluttua"
+        else -> "Päättyy ${remaining / 86_400_000L} pv kuluttua"
     }
 }
 
