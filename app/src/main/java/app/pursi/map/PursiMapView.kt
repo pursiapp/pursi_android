@@ -47,6 +47,7 @@ import org.maplibre.geojson.Point
 import org.maplibre.geojson.LineString
 import app.pursi.datasource.core.BoundingBox
 import app.pursi.datasource.core.ChartProvider
+import app.pursi.datasource.fi.AlgaeSatelliteCapabilities
 import app.pursi.map.SpriteCacheRegistry
 import app.pursi.datasource.core.RadarProvider
 import app.pursi.ais.AisVessel
@@ -203,6 +204,16 @@ fun PursiMapView(
     var radarRefreshTick by remember { mutableStateOf(0) }
     var radarRetryTick by remember { mutableStateOf(0) }
     var radarEffectToken by remember { mutableIntStateOf(0) }
+    var algaeEffectToken by remember { mutableIntStateOf(0) }
+    var algaeRefreshTick by remember { mutableStateOf(0) }
+    var algaeRetryTick by remember { mutableStateOf(0) }
+    LaunchedEffect(mapReadyToken, showAlgae) {
+        if (!showAlgae) return@LaunchedEffect
+        while (true) {
+            kotlinx.coroutines.delay(300_000L)
+            algaeRefreshTick++
+        }
+    }
     LaunchedEffect(mapReadyToken, showRadar) {
         if (!showRadar) return@LaunchedEffect
         while (true) {
@@ -781,9 +792,23 @@ fun PursiMapView(
         map.getStyle { style -> WfsOverlay.updateWaterObservations(style, showAlgae, waterObservations) }
     }
 
-    LaunchedEffect(mapReadyToken, showAlgae) {
+    LaunchedEffect(mapReadyToken, showAlgae, algaeRefreshTick, algaeRetryTick) {
         val map = currentMap.value as? MapLibreMap ?: return@LaunchedEffect
-        map.getStyle { style -> WeatherOverlay.updateAlgaeSatellite(style, showAlgae) }
+        val token = ++algaeEffectToken
+
+        val timeIso = AlgaeSatelliteCapabilities.latestTimeIso(force = algaeRetryTick > 0)
+        if (timeIso == null) {
+            kotlinx.coroutines.delay(10_000L)
+            algaeRetryTick++
+            return@LaunchedEffect
+        }
+
+        val cacheBust = (System.currentTimeMillis() / 300_000L).toString()
+
+        map.getStyle { style ->
+            if (token != algaeEffectToken) return@getStyle
+            WeatherOverlay.updateAlgaeSatellite(style, showAlgae, timeIso, cacheBust)
+        }
     }
 
     var depthGen by remember { mutableStateOf(0) }
