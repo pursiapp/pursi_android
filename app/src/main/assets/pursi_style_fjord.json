@@ -32,7 +32,7 @@
       "id": "background-water",
       "type": "background",
       "paint": {
-        "background-color": "#0a1628"
+        "background-color": "#172a42"
       }
     },
     {
@@ -403,7 +403,7 @@
         "tunnel"
       ],
       "paint": {
-        "line-color": "#0f1f30",
+        "line-color": "#22344c",
         "line-dasharray": [
           3,
           3
@@ -466,7 +466,7 @@
         "line-cap": "round"
       },
       "paint": {
-        "line-color": "#0f1f30",
+        "line-color": "#22344c",
         "line-width": [
           "interpolate",
           [
@@ -511,7 +511,7 @@
         "line-cap": "round"
       },
       "paint": {
-        "line-color": "#0f1f30",
+        "line-color": "#22344c",
         "line-width": [
           "interpolate",
           [
@@ -542,7 +542,7 @@
         "tunnel"
       ],
       "paint": {
-        "fill-color": "rgb(15,31,48)"
+        "fill-color": "rgb(32,52,72)"
       }
     },
     {

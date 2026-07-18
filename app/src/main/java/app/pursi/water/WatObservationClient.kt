@@ -18,7 +18,18 @@ class WaterObservationClient @Inject constructor(
     private val queryApi = "https://www.jarviwiki.fi/w/api.php"
 
     suspend fun fetchAlgae(daysBack: Int = 14): List<WaterObservation> =
-        fetch("alg", "|?Koordinaatit|?Päivämäärä|?Seuranta|?Ylläpito", daysBack) { null }
+        fetch("alg", "|?Koordinaatit|?Päivämäärä|?Levätilanne|?Seuranta|?Ylläpito", daysBack) { printouts ->
+            val arr = printouts.optJSONArray("Levätilanne")
+            if (arr != null && arr.length() > 0) {
+                val raw = arr.opt(0)
+                val num = when (raw) {
+                    is Number -> raw.toDouble()
+                    is org.json.JSONObject -> raw.optDouble("value", Double.NaN)
+                    else -> Double.NaN
+                }
+                if (!num.isNaN()) num else null
+            } else null
+        }
 
     suspend fun fetchTemperature(daysBack: Int = 14): List<WaterObservation> =
         fetch("temp", "|?Koordinaatit|?Päivämäärä|?Pintaveden_lämpötila|?Seuranta|?Ylläpito", daysBack) { printouts ->
@@ -111,12 +122,16 @@ class WaterObservationClient @Inject constructor(
                 if (obsCode == "temp" && extra != null && !extra.isNaN()) {
                     android.util.Log.d("WaterObsClient", "temp=${extra} at $siteName")
                 }
+                if (obsCode == "alg" && extra != null && !extra.isNaN()) {
+                    android.util.Log.d("WaterObsClient", "alg level=${extra.toInt()} at $siteName")
+                }
 
                 results.add(
                     when (obsCode) {
                         "alg" -> WaterObservation(
                             type = WaterObservationType.ALGAE,
                             latitude = lat, longitude = lon,
+                            algaeLevel = (extra?.toInt() ?: 0).coerceIn(0, 3),
                             timestamp = timestamp * 1000L,
                             source = source, yllapito = yllapito,
                             siteName = siteName, lakeName = lakeName

@@ -2,11 +2,15 @@ package app.pursi.ui.screens
 
 import android.os.StatFs
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -87,92 +91,104 @@ fun OfflineAreaDialog(
 
     Dialog(onDismissRequest = onDismiss) {
         Card(
-            Modifier.fillMaxWidth().imePadding(),
+            Modifier
+                .fillMaxWidth()
+                .heightIn(max = LocalConfiguration.current.screenHeightDp.dp * 0.9f)
+                .imePadding(),
             shape = RoundedCornerShape(12.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
         ) {
-            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(stringResource(R.string.offline_area_title), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Column(Modifier.padding(16.dp)) {
+                Column(
+                    Modifier
+                        .weight(1f)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(stringResource(R.string.offline_area_title), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
 
-                OutlinedTextField(
-                    value = name, onValueChange = { name = it },
-                    label = { Text(stringResource(R.string.offline_area_name)) },
-                    singleLine = true, modifier = Modifier.fillMaxWidth()
-                )
-
-                Text(stringResource(R.string.offline_area_zoom) + ": ${minZoom.toInt()} – ${maxZoom.toInt()}", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Text("${minZoom.toInt()}", style = MaterialTheme.typography.labelSmall, modifier = Modifier.width(24.dp))
-                    Slider(value = minZoom, onValueChange = { minZoom = it.coerceAtMost(maxZoom - 1f) }, valueRange = 4f..14f, steps = 9, modifier = Modifier.weight(1f))
-                }
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Text("${maxZoom.toInt()}", style = MaterialTheme.typography.labelSmall, modifier = Modifier.width(24.dp))
-                    Slider(value = maxZoom, onValueChange = { maxZoom = it.coerceAtLeast(minZoom + 1f) }, valueRange = 4f..14f, steps = 9, modifier = Modifier.weight(1f))
-                }
-
-                HorizontalDivider()
-
-                Text(stringResource(R.string.offline_area_layers), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
-
-                // Merikartat (Nautical charts)
-                if (chartsSources.isNotEmpty()) {
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        stringResource(R.string.offline_source_category_charts),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.SemiBold
+                    OutlinedTextField(
+                        value = name, onValueChange = { name = it },
+                        label = { Text(stringResource(R.string.offline_area_name)) },
+                        singleLine = true, modifier = Modifier.fillMaxWidth()
                     )
-                    chartsSources.forEach { s ->
-                        SourceRow(s = s, checked = enabledSources[s.providerId] == true) {
-                            enabledSources[s.providerId] = it
+
+                    Text(stringResource(R.string.offline_area_zoom) + ": ${minZoom.toInt()} – ${maxZoom.toInt()}", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Text("${minZoom.toInt()}", style = MaterialTheme.typography.labelSmall, modifier = Modifier.width(24.dp))
+                        Slider(value = minZoom, onValueChange = { minZoom = it.coerceAtMost(maxZoom - 1f) }, valueRange = 4f..14f, steps = 9, modifier = Modifier.weight(1f))
+                    }
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Text("${maxZoom.toInt()}", style = MaterialTheme.typography.labelSmall, modifier = Modifier.width(24.dp))
+                        Slider(value = maxZoom, onValueChange = { maxZoom = it.coerceAtLeast(minZoom + 1f) }, valueRange = 4f..14f, steps = 9, modifier = Modifier.weight(1f))
+                    }
+
+                    HorizontalDivider()
+
+                    Text(stringResource(R.string.offline_area_layers), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
+
+                    // Merikartat (Nautical charts)
+                    if (chartsSources.isNotEmpty()) {
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            stringResource(R.string.offline_source_category_charts),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        chartsSources.forEach { s ->
+                            SourceRow(s = s, checked = enabledSources[s.providerId] == true) {
+                                enabledSources[s.providerId] = it
+                            }
                         }
                     }
-                }
 
-                // Pohjakartat (Base maps)
-                if (baseSources.isNotEmpty()) {
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        stringResource(R.string.offline_source_category_base),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    baseSources.forEach { s ->
-                        SourceRow(s = s, checked = enabledSources[s.providerId] == true) {
-                            enabledSources[s.providerId] = it
+                    // Pohjakartat (Base maps)
+                    if (baseSources.isNotEmpty()) {
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            stringResource(R.string.offline_source_category_base),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        baseSources.forEach { s ->
+                            SourceRow(s = s, checked = enabledSources[s.providerId] == true) {
+                                enabledSources[s.providerId] = it
+                            }
                         }
                     }
-                }
 
-                // Merimerkit (Seamarks)
-                if (seamarkSources.isNotEmpty()) {
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        stringResource(R.string.offline_source_category_seamarks),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    seamarkSources.forEach { s ->
-                        SourceRow(s = s, checked = enabledSources[s.providerId] == true) {
-                            enabledSources[s.providerId] = it
+                    // Merimerkit (Seamarks)
+                    if (seamarkSources.isNotEmpty()) {
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            stringResource(R.string.offline_source_category_seamarks),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        seamarkSources.forEach { s ->
+                            SourceRow(s = s, checked = enabledSources[s.providerId] == true) {
+                                enabledSources[s.providerId] = it
+                            }
                         }
                     }
-                }
 
-                HorizontalDivider()
+                    HorizontalDivider()
 
-                Row(Modifier.fillMaxWidth()) {
-                    Column(Modifier.weight(1f)) {
-                        Text("${estimate.first} ${stringResource(R.string.offline_area_tiles)}", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
-                        Text(formatBytes(estimate.second), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                    Row(Modifier.fillMaxWidth()) {
+                        Column(Modifier.weight(1f)) {
+                            Text("${estimate.first} ${stringResource(R.string.offline_area_tiles)}", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+                            Text(formatBytes(estimate.second), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                        }
+                        Text(if (estimate.second < availableBytes) stringResource(R.string.offline_area_space_ok) else stringResource(R.string.offline_area_space_nok),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (estimate.second < availableBytes) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error)
                     }
-                    Text(if (estimate.second < availableBytes) stringResource(R.string.offline_area_space_ok) else stringResource(R.string.offline_area_space_nok),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = if (estimate.second < availableBytes) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error)
                 }
+
+                HorizontalDivider(Modifier.padding(top = 4.dp, bottom = 4.dp))
 
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                     TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }

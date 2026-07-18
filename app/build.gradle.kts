@@ -35,8 +35,8 @@ android {
         applicationId = "app.pursi"
         minSdk = 24
         targetSdk = 35
-        versionCode = 4
-        versionName = "0.5.3"
+        versionCode = 8
+        versionName = "0.6.3"
 
         val buildTimestamp = SimpleDateFormat(
             "yyyy-MM-dd HH:mm:ss z", Locale.US
@@ -148,6 +148,9 @@ dependencies {
     // Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0")
+
+    // WorkManager
+    implementation("androidx.work:work-runtime-ktx:2.10.0")
 
     // Room Database
     val roomVersion = "2.6.1"

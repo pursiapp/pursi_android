@@ -36,4 +36,10 @@ interface SavedRouteDao {
 
     @Query("DELETE FROM route_waypoints WHERE routeId = :routeId")
     suspend fun deleteWaypoints(routeId: String)
+
+    @Transaction
+    suspend fun insertWithWaypoints(route: SavedRoute, waypoints: List<RouteWaypoint>) {
+        insert(route)
+        insertWaypoints(waypoints.map { it.copy(routeId = route.id) })
+    }
 }

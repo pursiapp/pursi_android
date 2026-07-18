@@ -776,6 +776,52 @@ fun SettingsScreen(
             }
         }
 
+        // ── MERIVAROITUKSET ──
+        item { SectionHeader("Merivaroitukset") }
+
+        item {
+            val context = androidx.compose.ui.platform.LocalContext.current
+            val enabled = remember { mutableStateOf(app.pursi.datasource.fi.SeaWarningsPollWorker.isEnabled(context)) }
+            val distanceKm = remember { mutableStateOf(app.pursi.datasource.fi.SeaWarningsPollWorker.getDistanceKm(context)) }
+
+            Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+                Column(Modifier.padding(16.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text("Fintraffic merivaroitukset", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+                            Text("Push-notifikaatiot uusista merivaroituksista",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                        }
+                        Switch(checked = enabled.value, onCheckedChange = { v ->
+                            enabled.value = v
+                            app.pursi.datasource.fi.SeaWarningsPollWorker.setEnabled(context, v)
+                        })
+                    }
+                    if (enabled.value) {
+                        Spacer(Modifier.height(12.dp))
+                        Text("Ilmoitussäde", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
+                        Spacer(Modifier.height(4.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            val distanceOptions = listOf(25, 50, 100, 200, 9999)
+                            distanceOptions.forEach { km ->
+                                val label = if (km == 9999) "Koko Suomi" else "${km} km"
+                                FilterChip(
+                                    selected = distanceKm.value == km,
+                                    onClick = {
+                                        distanceKm.value = km
+                                        app.pursi.datasource.fi.SeaWarningsPollWorker.setDistanceKm(context, km)
+                                    },
+                                    label = { Text(label, style = MaterialTheme.typography.labelSmall) },
+                                    modifier = Modifier.padding(horizontal = 2.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         // ── MUUT ──
         item { SectionHeader(stringResource(R.string.settings_section_other)) }
 
@@ -935,16 +981,6 @@ fun SettingsScreen(
                     coverageName = "Maailmanlaajuinen",
                     description = "Merimerkit (poijut, viitat, majakat)",
                     category = "seamarks",
-                    coverage = app.pursi.datasource.core.BoundingBox.WORLD
-                ),
-                TileSource(
-                    providerId = "openfreemap", displayName = "OpenFreeMap",
-                    urlTemplate = "https://tiles.openfreemap.org/planet/{z}/{x}/{y}.pbf",
-                    extension = "pbf", minZoom = 0, maxZoom = 14,
-                    avgTileBytes = 5_000L,
-                    coverageName = "Maailmanlaajuinen",
-                    description = "Vektoripohjakartta (maasto, tiet, nimistö)",
-                    category = "base",
                     coverage = app.pursi.datasource.core.BoundingBox.WORLD
                 )
             )

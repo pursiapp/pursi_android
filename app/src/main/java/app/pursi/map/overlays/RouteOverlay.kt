@@ -1,6 +1,8 @@
 package app.pursi.map.overlays
 
 import org.maplibre.android.maps.Style
+import org.maplibre.android.style.expressions.Expression
+import org.maplibre.android.style.layers.CircleLayer
 import org.maplibre.android.style.layers.LineLayer
 import org.maplibre.android.style.layers.PropertyFactory
 import org.maplibre.android.style.sources.GeoJsonSource
@@ -20,7 +22,7 @@ object RouteOverlay {
     private const val SAVED_LINE = "saved-routes-line"
     private const val SAVED_DOTS = "saved-routes-dots"
 
-    fun updatePlanning(style: Style, waypoints: List<org.maplibre.android.geometry.LatLng>) {
+    fun updatePlanning(style: Style, waypoints: List<org.maplibre.android.geometry.LatLng>, dragIndex: Int? = null) {
         OverlayUtils.safeRemoveLayers(style, PLANNING_LINE, PLANNING_DOTS)
         OverlayUtils.safeRemoveSources(style, PLANNING_SRC, "$PLANNING_SRC-dots")
 
@@ -54,15 +56,37 @@ object RouteOverlay {
             val dotSrc = GeoJsonSource("$PLANNING_SRC-dots")
             dotSrc.setGeoJson(FeatureCollection.fromFeatures(dotFeatures))
             style.addSource(dotSrc)
-            style.addLayerAbove(
-                org.maplibre.android.style.layers.CircleLayer(PLANNING_DOTS, "$PLANNING_SRC-dots").apply {
+            val dotsLayer = CircleLayer(PLANNING_DOTS, "$PLANNING_SRC-dots").apply {
+                if (dragIndex != null) {
+                    setProperties(
+                        PropertyFactory.circleRadius(
+                            Expression.switchCase(
+                                Expression.eq(Expression.get("order"), Expression.literal(dragIndex.toDouble())),
+                                Expression.literal(12f),
+                                Expression.literal(6f)
+                            )
+                        ),
+                        PropertyFactory.circleColor(
+                            Expression.switchCase(
+                                Expression.eq(Expression.get("order"), Expression.literal(dragIndex.toDouble())),
+                                Expression.literal("#FF6F00"),
+                                Expression.literal("#1565C0")
+                            )
+                        ),
+                        PropertyFactory.circleStrokeWidth(2f),
+                        PropertyFactory.circleStrokeColor("#FFFFFF")
+                    )
+                } else {
                     setProperties(
                         PropertyFactory.circleRadius(6f),
                         PropertyFactory.circleColor("#1565C0"),
                         PropertyFactory.circleStrokeWidth(2f),
                         PropertyFactory.circleStrokeColor("#FFFFFF")
                     )
-                }, PLANNING_LINE.let { if (style.getLayer(it) != null) it else "layer-openseamap" }
+                }
+            }
+            style.addLayerAbove(
+                dotsLayer, PLANNING_LINE.let { if (style.getLayer(it) != null) it else "layer-openseamap" }
             )
         }
     }

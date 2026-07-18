@@ -213,32 +213,40 @@ object WfsOverlay {
     // ── Water observations ─────────────────────────────────────────
 
     fun updateWaterObservations(style: Style, showAlgae: Boolean, waterObservations: List<WaterObservation>) {
-        val srcA = "water-obs-a"
-        val srcB = "water-obs-b"
-        val layerA = "water-obs-layer-a"
-        val layerB = "water-obs-layer-b"
-        val labelLayer = "water-obs-label"
+        val allAlgaeLayers = listOf(
+            "water-obs-algae-a", "water-obs-algae-b1", "water-obs-algae-b2",
+            "water-obs-temp-a", "water-obs-temp-b1", "water-obs-temp-b2",
+            "water-obs-label-a", "water-obs-label-b1", "water-obs-label-b2"
+        )
+        val allSources = listOf(
+            "water-obs-a", "water-obs-b1", "water-obs-b2",
+            "water-obs-label-src-a", "water-obs-label-src-b1", "water-obs-label-src-b2"
+        )
 
         if (!showAlgae || waterObservations.isEmpty()) {
-            OverlayUtils.safeRemoveLayers(style, layerA, layerB, labelLayer)
-            OverlayUtils.safeRemoveSources(style, srcA, srcB)
+            for (id in allAlgaeLayers) OverlayUtils.safeRemoveLayer(style, id)
+            for (id in allSources) OverlayUtils.safeRemoveSource(style, id)
             return
         }
 
         val seen = mutableSetOf<String>()
         val primary = mutableListOf<Pair<Int, WaterObservation>>()
-        val secondary = mutableListOf<Pair<Int, WaterObservation>>()
+        val secondary1 = mutableListOf<Pair<Int, WaterObservation>>()
+        val secondary2 = mutableListOf<Pair<Int, WaterObservation>>()
 
         waterObservations.forEachIndexed { idx, obs ->
             val key = "%.5f_%.5f".format(obs.latitude, obs.longitude)
             if (seen.add(key)) primary.add(idx to obs)
-            else secondary.add(idx to obs)
+            else {
+                val sCount = secondary1.size + secondary2.size
+                if (sCount % 2 == 0) secondary1.add(idx to obs)
+                else secondary2.add(idx to obs)
+            }
         }
 
         fun makeFeatures(list: List<Pair<Int, WaterObservation>>): List<Feature> =
             list.map { (idx, obs) ->
                 Feature.fromGeometry(Point.fromLngLat(obs.longitude, obs.latitude)).apply {
-                    addStringProperty("circleColor", obs.circleColor)
                     addStringProperty("type", obs.type.name)
                     addNumberProperty("algaeLevel", obs.algaeLevel.toDouble())
                     addStringProperty("source", obs.sourceFormatted)
@@ -247,100 +255,182 @@ object WfsOverlay {
                     addStringProperty("dateFormatted", obs.dateFormatted)
                     addStringProperty("tempLabel", obs.tempLabel)
                     addStringProperty("titleLine", obs.titleLine)
+                    addStringProperty("circleColor", obs.circleColor)
                 }
             }
 
         val featuresA = makeFeatures(primary)
-        val featuresB = makeFeatures(secondary)
+        val featuresB1 = makeFeatures(secondary1)
+        val featuresB2 = makeFeatures(secondary2)
 
-        OverlayUtils.safeRemoveLayers(style, layerA, layerB, "$labelLayer-a", "$labelLayer-b")
-        OverlayUtils.safeRemoveSources(style, srcA, srcB, "water-obs-label-src")
+        // Remove old layers/sources
+        for (id in allAlgaeLayers) OverlayUtils.safeRemoveLayer(style, id)
+        for (id in allSources) OverlayUtils.safeRemoveSource(style, id)
+
+        WatObservationIcons.ensureIconsAdded(style)
+
+        val iconSizeExpr = Expression.interpolate(Expression.linear(), Expression.zoom(),
+            Expression.stop(6, Expression.literal(0.6f)),
+            Expression.stop(10, Expression.literal(0.95f)),
+            Expression.stop(14, Expression.literal(1.4f)),
+            Expression.stop(18, Expression.literal(2.0f))
+        )
 
         val radiusExpr = Expression.interpolate(Expression.linear(), Expression.zoom(),
             Expression.stop(5, Expression.literal(5f)),
             Expression.stop(8, Expression.literal(7f)),
             Expression.stop(11, Expression.literal(10f)),
-            Expression.stop(14, Expression.literal(14f))
+            Expression.stop(14, Expression.literal(14f)),
+            Expression.stop(18, Expression.literal(18f))
         )
 
-        val src1 = GeoJsonSource(srcA)
-        src1.setGeoJson(FeatureCollection.fromFeatures(featuresA))
-        style.addSource(src1)
-        val circleA = org.maplibre.android.style.layers.CircleLayer(layerA, srcA)
-        circleA.setProperties(
-            PropertyFactory.circleRadius(radiusExpr),
-            PropertyFactory.circleColor(Expression.get("circleColor")),
-            PropertyFactory.circleStrokeWidth(2f),
-            PropertyFactory.circleStrokeColor("#FFFFFF"),
-            PropertyFactory.circleOpacity(0.85f)
-        )
-        circleA.setMinZoom(5f)
-        style.addLayerAbove(circleA, "layer-openseamap")
+        val isAlgae = Expression.eq(Expression.get("type"), Expression.literal("ALGAE"))
+        val isTemp = Expression.eq(Expression.get("type"), Expression.literal("TEMPERATURE"))
 
-        if (featuresB.isNotEmpty()) {
-            val src2 = GeoJsonSource(srcB)
-            src2.setGeoJson(FeatureCollection.fromFeatures(featuresB))
-            style.addSource(src2)
-            val circleB = org.maplibre.android.style.layers.CircleLayer(layerB, srcB)
-            circleB.setProperties(
-                PropertyFactory.circleRadius(radiusExpr),
-                PropertyFactory.circleColor(Expression.get("circleColor")),
-                PropertyFactory.circleStrokeWidth(2f),
-                PropertyFactory.circleStrokeColor("#FFFFFF"),
-                PropertyFactory.circleOpacity(0.85f),
-                PropertyFactory.circleTranslate(arrayOf(18f, -18f)),
-                PropertyFactory.circleTranslateAnchor("map")
-            )
-            circleB.setMinZoom(5f)
-            style.addLayerAbove(circleB, layerA)
-        }
+        // ── Primary source ─────────────────────────────────────────
 
-        val tempFeaturesA = featuresA.filter {
-            it.getStringProperty("type") == "TEMPERATURE"
-        }
-        if (tempFeaturesA.isNotEmpty()) {
-            val labelSrcA = "water-obs-label-src-a"
-            OverlayUtils.safeRemoveSource(style, labelSrcA)
-            val srcLa = GeoJsonSource(labelSrcA)
-            srcLa.setGeoJson(FeatureCollection.fromFeatures(tempFeaturesA))
-            style.addSource(srcLa)
-            val tlA = org.maplibre.android.style.layers.SymbolLayer("$labelLayer-a", labelSrcA)
-            tlA.setProperties(
-                PropertyFactory.textField(Expression.get("tempLabel")),
-                PropertyFactory.textSize(13f),
-                PropertyFactory.textColor("#FFFFFF"),
-                PropertyFactory.textHaloColor("#000000"),
-                PropertyFactory.textHaloWidth(1.5f),
-                PropertyFactory.textAllowOverlap(true),
-                PropertyFactory.textOptional(true)
-            )
-            style.addLayerAbove(tlA, layerA)
-        }
+        if (featuresA.isNotEmpty()) {
+            val srcA = GeoJsonSource("water-obs-a")
+            srcA.setGeoJson(FeatureCollection.fromFeatures(featuresA))
+            style.addSource(srcA)
 
-        if (featuresB.isNotEmpty()) {
-            val tempFeaturesB = featuresB.filter {
-                it.getStringProperty("type") == "TEMPERATURE"
-            }
-            if (tempFeaturesB.isNotEmpty()) {
-                val labelSrcB = "water-obs-label-src-b"
-                OverlayUtils.safeRemoveSource(style, labelSrcB)
-                val srcLb = GeoJsonSource(labelSrcB)
-                srcLb.setGeoJson(FeatureCollection.fromFeatures(tempFeaturesB))
-                style.addSource(srcLb)
-                val tlB = org.maplibre.android.style.layers.SymbolLayer("$labelLayer-b", labelSrcB)
-                tlB.setProperties(
-                    PropertyFactory.textField(Expression.get("tempLabel")),
-                    PropertyFactory.textSize(13f),
-                    PropertyFactory.textColor("#FFFFFF"),
-                    PropertyFactory.textHaloColor("#000000"),
-                    PropertyFactory.textHaloWidth(1.5f),
-                    PropertyFactory.textAllowOverlap(true),
-                    PropertyFactory.textOptional(true),
-                    PropertyFactory.textTranslate(arrayOf(18f, -18f))
+            // Algae markers (triangles, SymbolLayer)
+            val algaeLayer = org.maplibre.android.style.layers.SymbolLayer("water-obs-algae-a", "water-obs-a").apply {
+                setFilter(isAlgae)
+                setProperties(
+                    PropertyFactory.iconImage(
+                        Expression.switchCase(
+                            Expression.eq(Expression.get("algaeLevel"), Expression.literal(0.0)),
+                            Expression.literal("algae-0"),
+                            Expression.eq(Expression.get("algaeLevel"), Expression.literal(1.0)),
+                            Expression.literal("algae-1"),
+                            Expression.eq(Expression.get("algaeLevel"), Expression.literal(2.0)),
+                            Expression.literal("algae-2"),
+                            Expression.eq(Expression.get("algaeLevel"), Expression.literal(3.0)),
+                            Expression.literal("algae-3"),
+                            Expression.literal("algae-0")
+                        )
+                    ),
+                    PropertyFactory.iconSize(iconSizeExpr),
+                    PropertyFactory.iconAllowOverlap(true),
+                    PropertyFactory.iconIgnorePlacement(true),
+                    PropertyFactory.iconTranslate(arrayOf(0f, 0f)),
+                    PropertyFactory.iconTranslateAnchor("map")
                 )
-                style.addLayerAbove(tlB, layerB)
+                setMinZoom(5f)
+                setMaxZoom(22f)
+            }
+            style.addLayerAbove(algaeLayer, "layer-openseamap")
+
+            // Temperature markers (circles, CircleLayer)
+            val tempLayer = org.maplibre.android.style.layers.CircleLayer("water-obs-temp-a", "water-obs-a").apply {
+                setFilter(isTemp)
+                setProperties(
+                    PropertyFactory.circleRadius(radiusExpr),
+                    PropertyFactory.circleColor(Expression.get("circleColor")),
+                    PropertyFactory.circleStrokeWidth(2f),
+                    PropertyFactory.circleStrokeColor("#000000"),
+                    PropertyFactory.circleOpacity(0.85f)
+                )
+                setMinZoom(5f)
+                setMaxZoom(22f)
+            }
+            style.addLayerAbove(tempLayer, "water-obs-algae-a")
+
+            // Temperature labels
+            val tempFeatures = featuresA.filter { it.getStringProperty("type") == "TEMPERATURE" }
+            if (tempFeatures.isNotEmpty()) {
+                val labelSrcA = GeoJsonSource("water-obs-label-src-a")
+                labelSrcA.setGeoJson(FeatureCollection.fromFeatures(tempFeatures))
+                style.addSource(labelSrcA)
+                val tlA = org.maplibre.android.style.layers.SymbolLayer("water-obs-label-a", "water-obs-label-src-a").apply {
+                    setProperties(
+                        PropertyFactory.textField(Expression.get("tempLabel")),
+                        PropertyFactory.textSize(13f),
+                        PropertyFactory.textColor("#FFFFFF"),
+                        PropertyFactory.textHaloColor("#000000"),
+                        PropertyFactory.textHaloWidth(1.5f),
+                        PropertyFactory.textAllowOverlap(true),
+                        PropertyFactory.textOptional(true)
+                    )
+                }
+                style.addLayerAbove(tlA, "water-obs-temp-a")
             }
         }
+
+        // ── Secondary source (duplicate coords, offset) ────────────
+
+        fun addGroup(style: Style, suffix: String, featuresList: List<Feature>, ox: Float, oy: Float) {
+            val srcId = "water-obs-$suffix"
+            val src = GeoJsonSource(srcId)
+            src.setGeoJson(FeatureCollection.fromFeatures(featuresList))
+            style.addSource(src)
+
+            val al = org.maplibre.android.style.layers.SymbolLayer("water-obs-algae-$suffix", srcId).apply {
+                setFilter(isAlgae)
+                setProperties(
+                    PropertyFactory.iconImage(
+                        Expression.switchCase(
+                            Expression.eq(Expression.get("algaeLevel"), Expression.literal(0.0)),
+                            Expression.literal("algae-0"),
+                            Expression.eq(Expression.get("algaeLevel"), Expression.literal(1.0)),
+                            Expression.literal("algae-1"),
+                            Expression.eq(Expression.get("algaeLevel"), Expression.literal(2.0)),
+                            Expression.literal("algae-2"),
+                            Expression.eq(Expression.get("algaeLevel"), Expression.literal(3.0)),
+                            Expression.literal("algae-3"),
+                            Expression.literal("algae-0")
+                        )
+                    ),
+                    PropertyFactory.iconSize(iconSizeExpr),
+                    PropertyFactory.iconAllowOverlap(true),
+                    PropertyFactory.iconIgnorePlacement(true),
+                    PropertyFactory.iconTranslate(arrayOf(ox, oy)),
+                    PropertyFactory.iconTranslateAnchor("map")
+                )
+                setMinZoom(5f); setMaxZoom(22f)
+            }
+            style.addLayerAbove(al, "water-obs-algae-a")
+
+            val tl = org.maplibre.android.style.layers.CircleLayer("water-obs-temp-$suffix", srcId).apply {
+                setFilter(isTemp)
+                setProperties(
+                    PropertyFactory.circleRadius(radiusExpr),
+                    PropertyFactory.circleColor(Expression.get("circleColor")),
+                    PropertyFactory.circleStrokeWidth(2f),
+                    PropertyFactory.circleStrokeColor("#000000"),
+                    PropertyFactory.circleOpacity(0.85f),
+                    PropertyFactory.circleTranslate(arrayOf(ox, oy)),
+                    PropertyFactory.circleTranslateAnchor("map")
+                )
+                setMinZoom(5f); setMaxZoom(22f)
+            }
+            style.addLayerAbove(tl, "water-obs-algae-$suffix")
+
+            val tempFeat = featuresList.filter { it.getStringProperty("type") == "TEMPERATURE" }
+            if (tempFeat.isNotEmpty()) {
+                val labelSrcId = "water-obs-label-src-$suffix"
+                val labelSrc = GeoJsonSource(labelSrcId)
+                labelSrc.setGeoJson(FeatureCollection.fromFeatures(tempFeat))
+                style.addSource(labelSrc)
+                val lbl = org.maplibre.android.style.layers.SymbolLayer("water-obs-label-$suffix", labelSrcId).apply {
+                    setProperties(
+                        PropertyFactory.textField(Expression.get("tempLabel")),
+                        PropertyFactory.textSize(13f),
+                        PropertyFactory.textColor("#FFFFFF"),
+                        PropertyFactory.textHaloColor("#000000"),
+                        PropertyFactory.textHaloWidth(1.5f),
+                        PropertyFactory.textAllowOverlap(true),
+                        PropertyFactory.textOptional(true),
+                        PropertyFactory.textTranslate(arrayOf(ox, oy))
+                    )
+                }
+                style.addLayerAbove(lbl, "water-obs-temp-$suffix")
+            }
+        }
+
+        if (featuresB1.isNotEmpty()) addGroup(style, "b1", featuresB1, 18f, -18f)
+        if (featuresB2.isNotEmpty()) addGroup(style, "b2", featuresB2, -18f, -18f)
     }
 
     // ── Valosektori polygon conversion ─────────────────────────────

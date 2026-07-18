@@ -14,6 +14,16 @@ object ChartOverlay {
     private const val OPENSEAMAP_SUBDIR = "openseamap"
     private const val OPENSEAMAP_MINZOOM = 4f
 
+    private val WFS_SEAMARK_LAYER_PREFIXES = listOf(
+        "layer-wfs-aton", "layer-wfs-aton-fault",
+        "layer-wfs-light-sector", "layer-wfs-notice",
+        "layer-wfs-navline", "layer-wfs-fairway"
+    )
+
+    private fun isWfsSeamarkLayer(id: String): Boolean {
+        return WFS_SEAMARK_LAYER_PREFIXES.any { id == it || id.startsWith("$it-") }
+    }
+
     fun updateLayers(
         style: Style,
         chartProviders: List<ChartProvider>,
@@ -51,33 +61,35 @@ object ChartOverlay {
             }
         }
 
-        val osmBaseId = "fallback-osm-base"
-        val osmSeamarkId = "fallback-osm-seamark"
-        OverlayUtils.safeRemoveLayer(style, osmBaseId)
-        OverlayUtils.safeRemoveSource(style, osmBaseId)
-        val osmTs = TileSet("xyz", "https://tile.openstreetmap.org/{z}/{x}/{y}.png")
-        osmTs.attribution = "© OpenStreetMap contributors"
-        style.addSource(RasterSource(osmBaseId, osmTs, 256))
-        val osmLayer = RasterLayer(osmBaseId, osmBaseId)
-        osmLayer.setProperties(
-            PropertyFactory.rasterResampling("linear"),
-            PropertyFactory.rasterOpacity(chartOpacity)
-        )
-        osmLayer.setMinZoom(2f)
-        style.addLayerBelow(osmLayer, "layer-seamark-bottom")
+        if (!offlineMode) {
+            val osmBaseId = "fallback-osm-base"
+            val osmSeamarkId = "fallback-osm-seamark"
+            OverlayUtils.safeRemoveLayer(style, osmBaseId)
+            OverlayUtils.safeRemoveSource(style, osmBaseId)
+            val osmTs = TileSet("xyz", "https://tile.openstreetmap.org/{z}/{x}/{y}.png")
+            osmTs.attribution = "© OpenStreetMap contributors"
+            style.addSource(RasterSource(osmBaseId, osmTs, 256))
+            val osmLayer = RasterLayer(osmBaseId, osmBaseId)
+            osmLayer.setProperties(
+                PropertyFactory.rasterResampling("linear"),
+                PropertyFactory.rasterOpacity(chartOpacity)
+            )
+            osmLayer.setMinZoom(2f)
+            style.addLayerBelow(osmLayer, "layer-seamark-bottom")
 
-        OverlayUtils.safeRemoveLayer(style, osmSeamarkId)
-        OverlayUtils.safeRemoveSource(style, osmSeamarkId)
-        val osmSeaTs = TileSet("xyz", "https://tiles.openseamap.org/seamark/{z}/{x}/{y}.png")
-        osmSeaTs.attribution = "© OpenSeaMap contributors"
-        style.addSource(RasterSource(osmSeamarkId, osmSeaTs, 256))
-        val osmSeaLayer = RasterLayer(osmSeamarkId, osmSeamarkId)
-        osmSeaLayer.setProperties(
-            PropertyFactory.rasterResampling("nearest"),
-            PropertyFactory.rasterOpacity(chartOpacity)
-        )
-        osmSeaLayer.setMinZoom(4f)
-        style.addLayerBelow(osmSeaLayer, "layer-seamark-bottom")
+            OverlayUtils.safeRemoveLayer(style, osmSeamarkId)
+            OverlayUtils.safeRemoveSource(style, osmSeamarkId)
+            val osmSeaTs = TileSet("xyz", "https://tiles.openseamap.org/seamark/{z}/{x}/{y}.png")
+            osmSeaTs.attribution = "© OpenSeaMap contributors"
+            style.addSource(RasterSource(osmSeamarkId, osmSeaTs, 256))
+            val osmSeaLayer = RasterLayer(osmSeamarkId, osmSeamarkId)
+            osmSeaLayer.setProperties(
+                PropertyFactory.rasterResampling("nearest"),
+                PropertyFactory.rasterOpacity(chartOpacity)
+            )
+            osmSeaLayer.setMinZoom(4f)
+            style.addLayerBelow(osmSeaLayer, "layer-seamark-bottom")
+        }
 
         val chartRefLayer = "layer-seamark-bottom"
         for (provider in chartProviders) {
@@ -98,8 +110,8 @@ object ChartOverlay {
                 for (l in provider.layers) {
                     val url = when {
                         tilesDirPath == null -> l.tileUrl
-                        java.io.File(tilesDirPath, "${l.subdir}").exists() ->
-                            "file://$tilesDirPath/${l.subdir}/{z}/{y}/{x}.png"
+                        java.io.File(tilesDirPath, "${provider.providerId}/${l.subdir}").exists() ->
+                            "file://$tilesDirPath/${provider.providerId}/${l.subdir}/{z}/{y}/{x}.png"
                         java.io.File(tilesDirPath, provider.providerId).exists() ->
                             "file://$tilesDirPath/${provider.providerId}/{z}/{y}/{x}.png"
                         else -> l.tileUrl
@@ -125,17 +137,6 @@ object ChartOverlay {
                     }
                 }
             }
-        }
-
-        // When a local chart provider is active (e.g. Traficom in Finland,
-        // Kartverket in Norway), hide the global OpenSeaMap seamark raster.
-        // It was added as a fallback earlier, but now that we know a local
-        // chart covers this area we should not show both — they visually
-        // double-up at mid-opacity slider positions.
-        if (chartProviders.isNotEmpty()) {
-            style.getLayer(osmSeamarkId)?.setProperties(
-                PropertyFactory.rasterOpacity(0f)
-            )
         }
     }
 
@@ -179,17 +180,17 @@ object ChartOverlay {
     }
 
     fun updateSeamarkVisibility(style: Style, seamarkLayerIds: List<String>, chartOpacity: Float) {
-        // The OSM seamark layers (DYNAMIC_icon_*) and WFS layers are no longer
-        // toggled by chart opacity; they are always visible unless a VV feature
-        // overrides them via setDynamicIconVisibility. This function now only
-        // toggles the seamark raster fallback layers that are passed via
-        // seamarkLayerIds, if any caller still needs that.
         val shouldHide = chartOpacity > 0.85f
         val v = if (shouldHide) Property.NONE else Property.VISIBLE
         for (id in seamarkLayerIds) {
             style.getLayer(id)?.setProperties(
                 PropertyFactory.visibility(v)
             )
+        }
+        for (layer in style.layers) {
+            if (isWfsSeamarkLayer(layer.id)) {
+                layer.setProperties(PropertyFactory.visibility(v))
+            }
         }
     }
 
@@ -208,9 +209,10 @@ object ChartOverlay {
     internal fun setDynamicIconVisibility(
         style: Style,
         hideForTurvalaite: Boolean,
-        hideForNotice: Boolean
+        hideForNotice: Boolean,
+        chartOpacity: Float
     ) {
-        val hide = hideForTurvalaite || hideForNotice
+        val hide = hideForTurvalaite || hideForNotice || chartOpacity > 0.85f
         val visibility = if (hide) Property.NONE else Property.VISIBLE
         for (layerId in listOf("DYNAMIC_icon_fixed_rotation", "DYNAMIC_icon_free_rotation")) {
             style.getLayer(layerId)?.setProperties(

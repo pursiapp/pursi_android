@@ -35,6 +35,7 @@ data class TileSource(
     val coverageName: String = "",
     val description: String = "",
     val category: String = "",
+    val subdir: String? = null,
     val coverage: BoundingBox? = null
 )
 

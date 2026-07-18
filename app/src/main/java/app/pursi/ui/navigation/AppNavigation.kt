@@ -157,8 +157,9 @@ fun AppNavigation(
     var savedCamZoom by rememberSaveable { mutableStateOf(mapPrefs.getFloat("cam_zoom", 7.0f).toDouble()) }
 
     LaunchedEffect(isOnline) {
-        if (!isOnline && downloadManager.hasCompletedJobs()) {
-            offlineMode = true
+        when {
+            !isOnline && downloadManager.hasCompletedJobs() -> offlineMode = true
+            isOnline -> offlineMode = false
         }
     }
 
@@ -166,11 +167,20 @@ fun AppNavigation(
         downloadManager.loadJobs()
     }
 
+    val camSaveHandler = remember { android.os.Handler(android.os.Looper.getMainLooper()) }
+    val camSaveRunnable = remember {
+        Runnable {
+            mapPrefs.edit()
+                .putFloat("cam_lat", savedCamLat.toFloat())
+                .putFloat("cam_lon", savedCamLon.toFloat())
+                .putFloat("cam_zoom", savedCamZoom.toFloat())
+                .apply()
+        }
+    }
     val onCameraMoved: (Double, Double, Double) -> Unit = { lat, lon, zoom ->
         savedCamLat = lat; savedCamLon = lon; savedCamZoom = zoom
-        mapPrefs.edit().putFloat("cam_lat", lat.toFloat())
-            .putFloat("cam_lon", lon.toFloat())
-            .putFloat("cam_zoom", zoom.toFloat()).apply()
+        camSaveHandler.removeCallbacks(camSaveRunnable)
+        camSaveHandler.postDelayed(camSaveRunnable, 500L)
     }
 
     PursiTheme(darkTheme = isNightMode) {
@@ -411,6 +421,7 @@ private fun CompactLayout(shared: SharedState) {
             }
             composable<Routes.Weather> {
                 WeatherScreen(
+                    mapViewModel = shared.mapViewModel,
                     onAlgaeClick = { lat, lon ->
                         shared.mapViewModel.setSearchTarget(lat, lon)
                         navController.navigate(Routes.Map()) {
@@ -537,6 +548,7 @@ private fun ExpandedLayout(shared: SharedState, isPortrait: Boolean) {
                 viewingTrackId = panelViewingTrackId,
                 onClearViewingTrack = { panelViewingTrackId = null },
                 onSearchPoi = { expandedSelectedItem = BottomNavItem.RouteList.name },
+                onNavigateToWarnings = { expandedSelectedItem = BottomNavItem.Weather.name },
                 showDebug = shared.debugMode,
                 isNightMode = shared.isNightMode,
                 windUnit = shared.windUnit,
@@ -619,7 +631,10 @@ private fun ExpandedPanelContent(
     onConsumeAreaResult: () -> Unit = {}
 ) {
     when (BottomNavItem.entries.find { it.name == expandedSelectedItem }) {
-        BottomNavItem.Weather -> WeatherContent(weatherViewModel = shared.weatherViewModel)
+        BottomNavItem.Weather -> WeatherContent(
+            weatherViewModel = shared.weatherViewModel,
+            mapViewModel = shared.mapViewModel
+        )
         BottomNavItem.RouteList -> RoutesContent(
             routesViewModel = routesViewModel,
             onNavigateToMap = { lat, lon ->

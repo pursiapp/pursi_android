@@ -33,4 +33,4 @@ Initial pre-release version.
 - MapLibre Native 13.2.0
 - Room database for local persistence
 - Dagger Hilt for dependency injection
-- Umami self-hosted analytics (opt-in)
+- Umami self-hosted analytics (opt-out, can be disabled in Settings)

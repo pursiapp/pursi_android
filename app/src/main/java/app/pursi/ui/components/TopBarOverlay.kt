@@ -44,6 +44,7 @@ fun TopBarOverlay(
     onSpeedUnitClick: () -> Unit,
     onCompassClick: () -> Unit,
     onWarningClick: () -> Unit = {},
+    showCompass: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     Box(modifier = modifier.fillMaxSize()) {
@@ -107,23 +108,25 @@ fun TopBarOverlay(
         }
 
         // Top-right: compass rose + orientation label
-        Column(
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .padding(top = 8.dp, end = 8.dp),
-            horizontalAlignment = Alignment.End,
-            verticalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            CompassRose(mapBearing = mapBearing, onClick = onCompassClick)
-            orientationLabel?.let { label ->
-                Card(
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f)),
-                    shape = RoundedCornerShape(4.dp)
-                ) {
-                    Text(label,
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
+        if (showCompass) {
+            Column(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(top = 8.dp, end = 8.dp),
+                horizontalAlignment = Alignment.End,
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                CompassRose(mapBearing = mapBearing, onClick = onCompassClick)
+                orientationLabel?.let { label ->
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f)),
+                        shape = RoundedCornerShape(4.dp)
+                    ) {
+                        Text(label,
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
+                    }
                 }
             }
         }

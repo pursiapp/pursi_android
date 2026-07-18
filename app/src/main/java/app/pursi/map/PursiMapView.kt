@@ -47,12 +47,15 @@ import org.maplibre.geojson.Point
 import org.maplibre.geojson.LineString
 import app.pursi.datasource.core.BoundingBox
 import app.pursi.datasource.core.ChartProvider
+import app.pursi.datasource.fi.AlgaeSatelliteCapabilities
+import app.pursi.map.SpriteCacheRegistry
 import app.pursi.datasource.core.RadarProvider
 import app.pursi.ais.AisVessel
 import app.pursi.map.ais.AisVesselOverlay
 import app.pursi.map.overlays.BoatOverlay
 import app.pursi.map.overlays.ChartOverlay
 import app.pursi.map.overlays.MeasureOverlay
+import app.pursi.map.overlays.NavigationOverlay
 import app.pursi.map.overlays.EmodnetDepthOverlay
 import app.pursi.map.overlays.RadarOverlay
 import app.pursi.map.overlays.RouteOverlay
@@ -62,7 +65,9 @@ import java.io.File
 import okhttp3.OkHttpClient
 import app.pursi.ui.viewmodel.BoatIconSize
 import app.pursi.ui.viewmodel.FollowMode
+import app.pursi.ui.viewmodel.MapPaneState
 import app.pursi.ui.viewmodel.NavmarkSize
+import app.pursi.ui.viewmodel.NavigationState
 import app.pursi.ui.viewmodel.OrientationMode
 import app.pursi.weather.LightningStrike
 import app.pursi.weather.MarineWarning
@@ -80,6 +85,7 @@ import kotlin.time.Duration.Companion.milliseconds
 @Composable
 fun PursiMapView(
     modifier: Modifier = Modifier,
+    paneState: MapPaneState = MapPaneState(),
     chartOpacity: Float = 1.0f,
     offlineMode: Boolean = false,
     tilesDirPath: String? = null,
@@ -88,9 +94,6 @@ fun PursiMapView(
     location: LatLng? = null,
     bearingDeg: Float? = null,
     speedMps: Float = 0f,
-    centerTrigger: Int = 0,
-    zoomToBoatTrigger: Int = 0,
-    zoomToBoatLevel: Float = 7f,
     courseLineMinutes: List<Int> = emptyList(),
     recordingTrail: List<LatLng> = emptyList(),
     routeWaypoints: List<LatLng> = emptyList(),
@@ -99,9 +102,6 @@ fun PursiMapView(
     centerTarget: LatLng? = null,
     poiMarker: LatLng? = null,
     onClearPoiMarker: () -> Unit = {},
-    initialCamLat: Double = Double.NaN,
-    initialCamLon: Double = Double.NaN,
-    initialCamZoom: Double = 7.0,
     onCameraMoved: (Double, Double, Double) -> Unit = { _, _, _ -> },
     onMapReady: (MapLibreMap) -> Unit = {},
     onMapClick: (LatLng) -> Unit = {},
@@ -112,8 +112,6 @@ fun PursiMapView(
     onCameraIdle: (LatLng, LatLng) -> Unit = { _, _ -> },
     onUserPan: () -> Unit = {},
     onCameraBearingChanged: (Float) -> Unit = {},
-    followMode: FollowMode = FollowMode.CENTERED,
-    orientationMode: OrientationMode = OrientationMode.NORTH_UP,
     lastKnownBearing: Float? = null,
     lookAheadFactor: Float = 0.25f,
     lookAheadSec: Int = 5,
@@ -131,6 +129,7 @@ fun PursiMapView(
     showAlgae: Boolean = false,
     waterObservations: List<WaterObservation> = emptyList(),
     seamarksDownloaded: Boolean = false,
+    downloadedSeamarkContinents: Set<String> = emptySet(),
     showDepth: Boolean = true,
     depthFeatures: Map<String, List<WfsFeature>> = emptyMap(),
     emodnetDepthSamples: List<app.pursi.data.model.EmodnetDepthSample> = emptyList(),
@@ -151,7 +150,13 @@ fun PursiMapView(
     onAlgaeObservationClick: (Int) -> Unit = {},
     onRadarEffectiveDelay: (Int) -> Unit = {},
     showSectors: Boolean = true,
-    viewportBounds: BoundingBox? = null
+    viewportBounds: BoundingBox? = null,
+    navigationState: NavigationState = NavigationState(),
+    lastLocation: LatLng? = null,
+    dragWaypointIndex: Int? = null,
+    onWaypointDragStart: (Int, Double, Double) -> Unit = { _, _, _ -> },
+    onWaypointDragMove: (Int, Double, Double) -> Unit = { _, _, _ -> },
+    onWaypointDragEnd: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val mapView = remember {
@@ -178,6 +183,9 @@ fun PursiMapView(
     val currentOnVesselClick by rememberUpdatedState(onVesselClick)
     val currentOnSeamarkClick by rememberUpdatedState(onSeamarkClick)
     val currentOnAlgaeObservationClick by rememberUpdatedState(onAlgaeObservationClick)
+    val currentOnWaypointDragStart by rememberUpdatedState(onWaypointDragStart)
+    val currentOnWaypointDragMove by rememberUpdatedState(onWaypointDragMove)
+    val currentOnWaypointDragEnd by rememberUpdatedState(onWaypointDragEnd)
     val currentRadarProvider by rememberUpdatedState(radarProvider)
     val obsRadarOpacity by rememberUpdatedState(radarOpacity)
     val obsLocation by rememberUpdatedState(location)
@@ -197,6 +205,16 @@ fun PursiMapView(
     var radarRefreshTick by remember { mutableStateOf(0) }
     var radarRetryTick by remember { mutableStateOf(0) }
     var radarEffectToken by remember { mutableIntStateOf(0) }
+    var algaeEffectToken by remember { mutableIntStateOf(0) }
+    var algaeRefreshTick by remember { mutableStateOf(0) }
+    var algaeRetryTick by remember { mutableStateOf(0) }
+    LaunchedEffect(mapReadyToken, showAlgae) {
+        if (!showAlgae) return@LaunchedEffect
+        while (true) {
+            kotlinx.coroutines.delay(300_000L)
+            algaeRefreshTick++
+        }
+    }
     LaunchedEffect(mapReadyToken, showRadar) {
         if (!showRadar) return@LaunchedEffect
         while (true) {
@@ -207,8 +225,25 @@ fun PursiMapView(
 
     DisposableEffect(Unit) {
         val handler = Handler(Looper.getMainLooper())
+        MapViewRegistry.register(mapView)
+
+        var dragWaypointIdx: Int? = null
 
         val longClickListener = MapLibreMap.OnMapLongClickListener { latlng ->
+            val m = currentMap.value
+            if (m != null) {
+                val sp = m.projection.toScreenLocation(latlng)
+                val f = m.queryRenderedFeatures(sp, "layer-route-dots")
+                if (f.isNotEmpty()) {
+                    val idx = f.first().getNumberProperty("order")?.toInt() ?: -1
+                    if (idx >= 0) {
+                        dragWaypointIdx = idx
+                        m.uiSettings.isScrollGesturesEnabled = false
+                        currentOnWaypointDragStart(idx, latlng.latitude, latlng.longitude)
+                        return@OnMapLongClickListener true
+                    }
+                }
+            }
             currentOnLongPress(LatLng(latlng.latitude, latlng.longitude))
             true
         }
@@ -267,6 +302,25 @@ fun PursiMapView(
             var inMeasureMode = false
 
             mapView.setOnTouchListener { _, event ->
+                val dragIdx = dragWaypointIdx
+                if (dragIdx != null) {
+                    when (event.actionMasked) {
+                        MotionEvent.ACTION_MOVE -> {
+                            val m = currentMap.value
+                            if (m != null) {
+                                val screenPoint = PointF(event.x, event.y)
+                                val latlng = m.projection.fromScreenLocation(screenPoint)
+                                currentOnWaypointDragMove(dragIdx, latlng.latitude, latlng.longitude)
+                            }
+                        }
+                        MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                            dragWaypointIdx = null
+                            map.uiSettings.isScrollGesturesEnabled = true
+                            currentOnWaypointDragEnd()
+                        }
+                    }
+                }
+
                 when (event.actionMasked) {
                     MotionEvent.ACTION_DOWN -> {
                         if (inMeasureMode) {
@@ -351,7 +405,7 @@ fun PursiMapView(
             algaeObsClickListener = MapLibreMap.OnMapClickListener { latlng ->
                 val sp = map.projection.toScreenLocation(latlng)
                 val rect = android.graphics.RectF(sp.x - 24f, sp.y - 24f, sp.x + 24f, sp.y + 24f)
-                val f = map.queryRenderedFeatures(rect, "water-obs-layer-a", "water-obs-layer-b")
+                val f = map.queryRenderedFeatures(rect, "water-obs-algae-a", "water-obs-algae-b", "water-obs-temp-a", "water-obs-temp-b")
                 if (f.isNotEmpty()) {
                     val idx = f.first().getNumberProperty("obsIndex")?.toInt() ?: -1
                     if (idx >= 0) {
@@ -379,10 +433,10 @@ fun PursiMapView(
             onMapReady(map)
 
             // Restore saved camera position
-            if (!initialCamLat.isNaN() && !initialCamLon.isNaN()) {
+            if (!paneState.initialCamLat.isNaN() && !paneState.initialCamLon.isNaN()) {
                 map.cameraPosition = CameraPosition.Builder()
-                    .target(LatLng(initialCamLat, initialCamLon))
-                    .zoom(initialCamZoom)
+                    .target(LatLng(paneState.initialCamLat, paneState.initialCamLon))
+                    .zoom(paneState.initialCamZoom)
                     .build()
             }
         }
@@ -403,55 +457,45 @@ fun PursiMapView(
             mapView.onPause()
             mapView.onStop()
             mapView.onDestroy()
+            MapViewRegistry.unregister(mapView)
+            TileServerManager.releaseSeamarkServer()
+            TileServerManager.releaseTraficomServer()
         }
     }
 
-    var tileServer by remember { mutableStateOf<SeamarkTileServer?>(null) }
-    var tileServerProxy by remember { mutableStateOf<TraficomTileServer?>(null) }
-    DisposableEffect(Unit) {
-        onDispose {
-            tileServer?.stopServer()
-            tileServerProxy?.stopServer()
-        }
-    }
+    var tileServerRef by remember { mutableStateOf<SeamarkTileServer?>(null) }
+    var tileServerProxyRef by remember { mutableStateOf<TraficomTileServer?>(null) }
 
     // Track last loaded state to avoid duplicate style loads and server restarts
     var lastStyleUri by remember { mutableStateOf<String?>(null) }
     var lastReloadTrigger by remember { mutableStateOf(0) }
-    var lastServerConfig by remember { mutableStateOf<Boolean?>(null) }
+    var lastServerFileSet by remember { mutableStateOf<Set<String>>(emptySet()) }
     var seamarkLayerIds by remember { mutableStateOf<List<String>>(emptyList()) }
 
-    LaunchedEffect(seamarksDownloaded, currentMap.value, reloadTrigger, isNightMode) {
+    LaunchedEffect(seamarksDownloaded, downloadedSeamarkContinents, currentMap.value, reloadTrigger, isNightMode) {
         val map = currentMap.value ?: return@LaunchedEffect
 
-        if (lastServerConfig == null || seamarksDownloaded != lastServerConfig) {
-            lastServerConfig = seamarksDownloaded
-            tileServer?.stopServer()
-            val continentFiles = app.pursi.map.PmtilesDownloader.CONTINENTS
-                .map { java.io.File(context.filesDir, "seamarks_${it.id}.pmtiles") }
-                .filter { it.exists() }
-            val legacyFile = java.io.File(context.filesDir, "seamarks.pmtiles")
-            val allLocalFiles = listOfNotNull(
-                legacyFile.takeIf { it.exists() }
-            ) + continentFiles
-            if (allLocalFiles.isNotEmpty()) {
-                val server = SeamarkTileServer(
-                    pmtilesFiles = allLocalFiles,
-                    port = 8080
-                )
-                if (withContext(Dispatchers.IO) { server.startServer() }) {
-                    tileServer = server
-                }
-            } else {
-                val server = SeamarkTileServer(
-                    pmtilesUrls = listOf(app.pursi.map.PmtilesDownloader.DEFAULT_SEAMARKS_URL),
-                    client = okhttp3.OkHttpClient(),
-                    port = 8080
-                )
-                if (withContext(Dispatchers.IO) { server.startServer() }) {
-                    tileServer = server
-                }
+        val continentFiles = app.pursi.map.PmtilesDownloader.CONTINENTS
+            .map { java.io.File(context.filesDir, "seamarks_${it.id}.pmtiles") }
+            .filter { it.exists() }
+        val legacyFile = java.io.File(context.filesDir, "seamarks.pmtiles")
+        val allLocalFiles = listOfNotNull(
+            legacyFile.takeIf { it.exists() }
+        ) + continentFiles
+        val currentFileSet = allLocalFiles.map { it.absolutePath }.toSet()
+
+        if (currentFileSet != lastServerFileSet) {
+            lastServerFileSet = currentFileSet
+            TileServerManager.releaseSeamarkServer()
+            val pmtilesFiles = allLocalFiles
+            val pmtilesUrls = if (allLocalFiles.isEmpty()) {
+                listOf(app.pursi.map.PmtilesDownloader.DEFAULT_SEAMARKS_URL)
+            } else emptyList()
+            val client = if (pmtilesUrls.isNotEmpty()) okhttp3.OkHttpClient() else null
+            val server = withContext(Dispatchers.IO) {
+                TileServerManager.acquireSeamarkServer(pmtilesFiles, pmtilesUrls, client, context)
             }
+            tileServerRef = server
         }
 
         val styleUri = if (isNightMode) "asset://pursi_style_fjord.json" else "asset://pursi_style_vector.json"
@@ -464,12 +508,18 @@ fun PursiMapView(
                     val sfname = if (dm >= 2.0f) "seamark_sprites@2x" else "seamark_sprites"
                     val jsobj = org.json.JSONObject(context.assets.open("$sfname.json").bufferedReader().readText())
                     val bmp = android.graphics.BitmapFactory.decodeStream(context.assets.open("$sfname.png"))
-                    val names = jsobj.names()
-                    for (i in 0 until names.length()) {
-                        val n = names.getString(i)
-                        val e = jsobj.getJSONObject(n)
-                        val icon = android.graphics.Bitmap.createBitmap(bmp, e.getInt("x"), e.getInt("y"), e.getInt("width"), e.getInt("height"))
-                        if (style.getImage(n) == null) style.addImage(n, icon)
+                    SpriteCacheRegistry.recycleByLabel("seamark-sprite")
+                    try {
+                        val names = jsobj.names()
+                        for (i in 0 until names.length()) {
+                            val n = names.getString(i)
+                            val e = jsobj.getJSONObject(n)
+                            val icon = android.graphics.Bitmap.createBitmap(bmp, e.getInt("x"), e.getInt("y"), e.getInt("width"), e.getInt("height"))
+                            SpriteCacheRegistry.track(icon, "seamark-sprite")
+                            if (style.getImage(n) == null) style.addImage(n, icon)
+                        }
+                    } finally {
+                        bmp.recycle()
                     }
                 } catch (ex: Exception) {
                     android.util.Log.e("PursiMap", "Seamark sprite error: ${ex.message}")
@@ -524,7 +574,7 @@ fun PursiMapView(
         val map = currentMap.value as? MapLibreMap ?: return@LaunchedEffect
 
         val useProxyServer = !offlineMode && chartProviders.any { it.needsTileServer }
-        val localTileServerProxy = tileServerProxy
+        val localTileServerProxy = tileServerProxyRef
         if (useProxyServer && (localTileServerProxy == null || !localTileServerProxy.isRunning)) {
             val proxyProvider = chartProviders.first { it.needsTileServer }
             val fallbackLayers = proxyProvider.layers
@@ -533,17 +583,15 @@ fun PursiMapView(
                     val threshold = if (it.minZoom <= 4f) 0 else 3000
                     FallbackTileLayer(it.tileUrl, it.minZoom, threshold)
                 }
-            val server = TraficomTileServer(fallbackLayers, cacheDir = context.cacheDir)
-            if (server.startServer()) {
-                tileServerProxy = server
-            }
+            val server = TileServerManager.acquireTraficomServer(fallbackLayers, context.cacheDir)
+            tileServerProxyRef = server
         }
 
         map.getStyle { style ->
             ChartOverlay.updateLayers(
                 style, chartProviders, allRegisteredProviders,
                 offlineMode, tilesDirPath, chartOpacity,
-                tileServerProxy?.baseTileUrl
+                tileServerProxyRef?.baseTileUrl
             )
         }
     }
@@ -566,10 +614,10 @@ fun PursiMapView(
         BoatOverlay.updateBoatAndCourse(style, p.latitude, p.longitude, bearingDeg, speedMps, courseLineMinutes)
     }
 
-    LaunchedEffect(mapReadyToken, centerTrigger) {
+    LaunchedEffect(mapReadyToken, paneState.centerTrigger) {
         val map = currentMap.value as? MapLibreMap ?: return@LaunchedEffect
         val pos = location ?: return@LaunchedEffect
-        if (centerTrigger > 0) {
+        if (paneState.centerTrigger > 0) {
             map.animateCamera(
                 CameraUpdateFactory.newLatLngZoom(pos, map.cameraPosition.zoom.coerceAtLeast(10.0)),
                 500
@@ -577,12 +625,12 @@ fun PursiMapView(
         }
     }
 
-    LaunchedEffect(mapReadyToken, zoomToBoatTrigger) {
+    LaunchedEffect(mapReadyToken, paneState.zoomToBoatTrigger) {
         val map = currentMap.value as? MapLibreMap ?: return@LaunchedEffect
         val pos = location ?: return@LaunchedEffect
-        if (zoomToBoatTrigger > 0) {
+        if (paneState.zoomToBoatTrigger > 0) {
             map.animateCamera(
-                CameraUpdateFactory.newLatLngZoom(pos, zoomToBoatLevel.toDouble().coerceIn(4.0, 18.0)),
+                CameraUpdateFactory.newLatLngZoom(pos, paneState.zoomToBoatLevel.toDouble().coerceIn(4.0, 18.0)),
                 150
             )
         }
@@ -608,13 +656,13 @@ fun PursiMapView(
 
     // Camera tracking (location only): animates target + zoom to follow the boat.
     // Decoupled from the orientation effect so the two animations don't fight.
-    LaunchedEffect(mapReadyToken, followMode) {
+    LaunchedEffect(mapReadyToken, paneState.followMode) {
         val map = currentMap.value as? MapLibreMap ?: return@LaunchedEffect
         snapshotFlow { obsLocation to obsSpeed }
             .sample(250.milliseconds)
             .collect { (pos, _) ->
                 val p = pos ?: return@collect
-                if (followMode == FollowMode.OFF) return@collect
+                if (paneState.followMode == FollowMode.OFF) return@collect
 
                 val offsetFactor = obsLookAheadFactor
                 val target = if (offsetFactor > 0f) {
@@ -637,7 +685,7 @@ fun PursiMapView(
 
     // Orientation: animates only the bearing. Runs even when followMode == OFF
     // so the user can change orientation while panned away.
-    LaunchedEffect(mapReadyToken, orientationMode) {
+    LaunchedEffect(mapReadyToken, paneState.orientationMode) {
         val map = currentMap.value as? MapLibreMap ?: return@LaunchedEffect
         snapshotFlow { obsBearing to obsLastKnownBearing }
             .sample(250.milliseconds)
@@ -645,7 +693,7 @@ fun PursiMapView(
                 val bearing: Float? = pair.first
                 val lastKnown: Float? = pair.second
                 val current = map.cameraPosition
-                val newBearing = when (orientationMode) {
+                val newBearing = when (paneState.orientationMode) {
                     OrientationMode.NORTH_UP -> 0.0
                     OrientationMode.COURSE_UP -> {
                         val b = bearing ?: lastKnown
@@ -666,7 +714,7 @@ fun PursiMapView(
 
     LaunchedEffect(mapReadyToken, routeWaypoints) {
         val map = currentMap.value as? MapLibreMap ?: return@LaunchedEffect
-        map.getStyle { style -> RouteOverlay.updatePlanning(style, routeWaypoints) }
+        map.getStyle { style -> RouteOverlay.updatePlanning(style, routeWaypoints, dragWaypointIndex) }
     }
 
     LaunchedEffect(mapReadyToken, measureLinePoints) {
@@ -682,6 +730,11 @@ fun PursiMapView(
     LaunchedEffect(mapReadyToken, savedRouteLines) {
         val map = currentMap.value as? MapLibreMap ?: return@LaunchedEffect
         map.getStyle { style -> RouteOverlay.updateSavedRoutes(style, savedRouteLines) }
+    }
+
+    LaunchedEffect(mapReadyToken, navigationState) {
+        val map = currentMap.value as? MapLibreMap ?: return@LaunchedEffect
+        map.getStyle { style -> NavigationOverlay.update(style, navigationState, lastLocation) }
     }
 
     // ── AIS vessel overlay ──────────────────────────────────────────
@@ -743,9 +796,23 @@ fun PursiMapView(
         map.getStyle { style -> WfsOverlay.updateWaterObservations(style, showAlgae, waterObservations) }
     }
 
-    LaunchedEffect(mapReadyToken, showAlgae) {
+    LaunchedEffect(mapReadyToken, showAlgae, algaeRefreshTick, algaeRetryTick) {
         val map = currentMap.value as? MapLibreMap ?: return@LaunchedEffect
-        map.getStyle { style -> WeatherOverlay.updateAlgaeSatellite(style, showAlgae) }
+        val token = ++algaeEffectToken
+
+        val timeIso = AlgaeSatelliteCapabilities.latestTimeIso(force = algaeRetryTick > 0)
+        if (timeIso == null) {
+            kotlinx.coroutines.delay(10_000L)
+            algaeRetryTick++
+            return@LaunchedEffect
+        }
+
+        val cacheBust = (System.currentTimeMillis() / 300_000L).toString()
+
+        map.getStyle { style ->
+            if (token != algaeEffectToken) return@getStyle
+            WeatherOverlay.updateAlgaeSatellite(style, showAlgae, timeIso, cacheBust)
+        }
     }
 
     var depthGen by remember { mutableStateOf(0) }
@@ -834,7 +901,8 @@ fun PursiMapView(
             ChartOverlay.setDynamicIconVisibility(
                 style = style,
                 hideForTurvalaite = hideForTurvalaite,
-                hideForNotice = hideForNotice
+                hideForNotice = hideForNotice,
+                chartOpacity = chartOpacity
             )
         }
     }
@@ -867,6 +935,7 @@ private fun configureMap(map: MapLibreMap, context: Context, initialChartOpacity
 
 private fun Style.registerNavmarkIcons(context: android.content.Context, isNightMode: Boolean = false) {
     val dir = if (isNightMode) "navmarks-night" else "navmarks"
+    SpriteCacheRegistry.recycleByLabel("navmark-icon")
     val names = listOf(
         "bc_north", "bc_east", "bc_south", "bc_west",
         "bc_bcn_north", "bc_bcn_east", "bc_bcn_south", "bc_bcn_west",
@@ -907,6 +976,7 @@ private fun Style.registerNavmarkIcons(context: android.content.Context, isNight
         val bmp = loadIcon(context, "$dir/$name.png")
             ?: if (isNightMode) loadIcon(context, "navmarks/$name.png") else null
         if (bmp != null && getImage(name) == null) {
+            SpriteCacheRegistry.track(bmp, "navmark-icon")
             addImage(name, bmp)
             loaded++
         }
@@ -926,24 +996,31 @@ private fun Style.loadOfmSprite(context: android.content.Context) {
         val sfname = if (dm >= 2.0f) "ofm@2x" else "ofm"
         val jsobj = org.json.JSONObject(context.assets.open("ofm_sprite/$sfname.json").bufferedReader().readText())
         val bmp = android.graphics.BitmapFactory.decodeStream(context.assets.open("ofm_sprite/$sfname.png"))
-        val names = jsobj.names()
-        var count = 0
-        for (i in 0 until names.length()) {
-            val n = names.getString(i)
-            if (getImage(n) == null) {
-                val e = jsobj.getJSONObject(n)
-                val icon = android.graphics.Bitmap.createBitmap(bmp, e.getInt("x"), e.getInt("y"), e.getInt("width"), e.getInt("height"))
-                addImage(n, icon)
-                count++
+        SpriteCacheRegistry.recycleByLabel("ofm-sprite")
+        try {
+            val names = jsobj.names()
+            var count = 0
+            for (i in 0 until names.length()) {
+                val n = names.getString(i)
+                if (getImage(n) == null) {
+                    val e = jsobj.getJSONObject(n)
+                    val icon = android.graphics.Bitmap.createBitmap(bmp, e.getInt("x"), e.getInt("y"), e.getInt("width"), e.getInt("height"))
+                    SpriteCacheRegistry.track(icon, "ofm-sprite")
+                    addImage(n, icon)
+                    count++
+                }
             }
+            android.util.Log.d("PursiMap", "Loaded $count ofm sprite icons")
+        } finally {
+            bmp.recycle()
         }
-        android.util.Log.d("PursiMap", "Loaded $count ofm sprite icons")
     } catch (ex: Exception) {
         android.util.Log.e("PursiMap", "OFM sprite error: ${ex.message}")
     }
 }
 
 private fun Style.loadPoiIcons(context: android.content.Context) {
+    SpriteCacheRegistry.recycleByLabel("poi-icon")
     val names = listOf(
         "sauna", "bbq", "bench", "shower", "firepit", "campfire",
         "viewpoint", "information", "lightning"
@@ -955,6 +1032,7 @@ private fun Style.loadPoiIcons(context: android.content.Context) {
                 context.assets.open("poi_icons/$name.png")
             )
             if (bmp != null && getImage(name) == null) {
+                SpriteCacheRegistry.track(bmp, "poi-icon")
                 addImage(name, bmp)
                 loaded++
             }

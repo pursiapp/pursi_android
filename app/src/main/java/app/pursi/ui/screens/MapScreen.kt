@@ -7,12 +7,17 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
@@ -27,14 +32,23 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import app.pursi.data.model.RouteWaypoint
 import app.pursi.data.model.SavedRoute
 import app.pursi.ui.components.*
+import app.pursi.ui.components.RestoreStrip
+import app.pursi.ui.components.SplitterHandle
 import app.pursi.weather.WeatherUnitPrefs
 import app.pursi.weather.currentForecastPoint
+import app.pursi.weather.isRelevantWithin24h
 import app.pursi.data.model.TrackSummary
 import app.pursi.location.BearingSmoother
 import app.pursi.location.SpeedSmoother
@@ -43,7 +57,12 @@ import app.pursi.datasource.core.BoundingBox
 import app.pursi.datasource.core.Regions
 import app.pursi.map.PursiMapView
 import app.pursi.ui.viewmodel.FollowMode
+import app.pursi.ui.viewmodel.MapPaneState
+import app.pursi.ui.viewmodel.MapUiState
 import app.pursi.ui.viewmodel.MapViewModel
+import app.pursi.ui.viewmodel.PaneChartMode
+import app.pursi.ui.viewmodel.PaneLayerState
+import app.pursi.ui.viewmodel.SplitOrientation
 import app.pursi.ui.viewmodel.SeamarkDetail
 import app.pursi.ui.viewmodel.SeamarkSource
 import app.pursi.DEFAULT_LAT
@@ -125,6 +144,8 @@ private fun buildOsmSeamarkAt(map: MapLibreMap, clickLat: Double, clickLng: Doub
         longitude = clickLng
     )
 }
+
+private fun MapUiState.toPaneLayerState() = PaneLayerState.fromMapUiState(this)
 
 @Composable
 fun MapScreen(
@@ -231,8 +252,8 @@ fun MapScreen(
             while (true) {
                 recordingElapsed = ((System.currentTimeMillis() - recordingStartTime) / 1000).toInt()
                 kotlinx.coroutines.delay(1000L)
-            }
-        } else {
+                }
+            } else {
             recordingElapsed = 0
             recordingStartTime = 0L
         }
@@ -282,7 +303,24 @@ fun MapScreen(
     var centerTrigger by rememberSaveable { mutableStateOf(0) }
     var zoomToBoatTrigger by remember { mutableStateOf(0) }
     var zoomToBoatLevel by remember { mutableStateOf(initialCamZoom.toFloat()) }
+
+    // Per-pane local state for split-screen second pane
+    var pane2CenterTrigger by remember { mutableStateOf(0) }
+    var pane2ZoomToBoatTrigger by remember { mutableStateOf(0) }
+    var pane2ZoomToBoatLevel by remember { mutableStateOf(initialCamZoom.toFloat()) }
+
+    // Per-pane layer state (independently toggleable in split mode)
+    val paneALayerState by mapViewModel.paneALayerState.collectAsStateWithLifecycle()
+    val paneBLayerState by mapViewModel.paneBLayerState.collectAsStateWithLifecycle()
+    // Which pane's layers panel is open: null = closed, true = pane A, false = pane B
+    var layersTargetPane by remember { mutableStateOf<Boolean?>(null) }
+
+    // Per-pane initial camera (persisted across restarts)
+    val paneAInitialCam = remember { mapViewModel.getPaneInitialCamera("a") }
+    val paneBInitialCam = remember { mapViewModel.getPaneInitialCamera("b") }
+
     var mapBearing by remember { mutableStateOf(0f) }
+    var pane2Bearing by remember { mutableStateOf(0f) }
     var viewportBounds by remember { mutableStateOf<BoundingBox?>(null) }
     var mapRef by remember { mutableStateOf<MapLibreMap?>(null) }
 
@@ -290,10 +328,15 @@ fun MapScreen(
     var routeWaypoints by remember { mutableStateOf<List<LatLng>>(emptyList()) }
     var showRouteSaveDialog by rememberSaveable { mutableStateOf(false) }
     var routeName by rememberSaveable { mutableStateOf("") }
+    var routeCardDragX by rememberSaveable { mutableStateOf(0f) }
+    var routeCardDragY by rememberSaveable { mutableStateOf(0f) }
+    var dragWaypointIndex by remember { mutableStateOf<Int?>(null) }
     var selectedVesselMmsi by remember { mutableStateOf<Int?>(null) }
 
     var showAlgaeReport by remember { mutableStateOf(false) }
     var algaeReportLocation by remember { mutableStateOf<LatLng?>(null) }
+
+    val navState by mapViewModel.navigationState.collectAsStateWithLifecycle()
 
     var measureMode by rememberSaveable { mutableStateOf(false) }
     var measurePoints by remember { mutableStateOf<List<LatLng>>(emptyList()) }
@@ -317,7 +360,20 @@ fun MapScreen(
         if (orientationLabel != null) orientationLabel = null
     }
 
-
+    LaunchedEffect(navState.isActive, location) {
+        if (!navState.isActive) return@LaunchedEffect
+        loc@ while (true) {
+            val loc = location ?: break@loc
+            if (navState.isActive) {
+                val heading = lastKnownBearing ?: 0f
+                mapViewModel.updateNavigation(
+                    loc.latitude, loc.longitude, heading,
+                    app.pursi.location.SpeedCalculator.metersPerSecondToKnots(loc.speed)
+                )
+            }
+            kotlinx.coroutines.delay(1000)
+        }
+    }
 
     val allBoats by mapViewModel.boatDao.getAll().collectAsStateWithLifecycle(initialValue = emptyList())
     val defaultBoat = allBoats.firstOrNull { it.isDefault }
@@ -368,169 +424,528 @@ fun MapScreen(
 
     val loc = location
     val relevantWarnings = if (loc != null) {
-        warnings.filter { it.polygonCoords.isEmpty() || app.pursi.weather.pointInPolygon(loc.latitude, loc.longitude, it.polygonCoords) }
+        warnings.filter {
+            (it.polygonCoords.isEmpty() ||
+                app.pursi.weather.pointInPolygon(loc.latitude, loc.longitude, it.polygonCoords)) &&
+            it.isRelevantWithin24h()
+        }
     } else {
-        warnings.filter { it.polygonCoords.isEmpty() }
+        warnings.filter { it.polygonCoords.isEmpty() && it.isRelevantWithin24h() }
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
         val mapLocation = LatLng(effectiveLocation.latitude, effectiveLocation.longitude)
+        val useSplit = uiState.splitMode
 
-        PursiMapView(
-            modifier = Modifier.fillMaxSize(),
-            chartOpacity = chartOpacity,
-            offlineMode = offlineMode,
-            tilesDirPath = tilesDirPath,
-            chartProviders = uiState.chartProviders,
-            location = mapLocation,
-            bearingDeg = smoothedBearing,
-            speedMps = smoothedSpeed,
-            centerTrigger = centerTrigger,
-            zoomToBoatTrigger = zoomToBoatTrigger,
-            zoomToBoatLevel = zoomToBoatLevel,
-            courseLineMinutes = if (courseLinesEnabled) {
-                val kn = smoothedSpeed / 0.514f
-                when {
-                    kn < 3f -> listOf(10, 20)      // slow: long lines
-                    kn < 10f -> listOf(5, 15)
-                    kn < 20f -> listOf(2, 10)
-                    else -> listOf(1, 5)            // fast: short lines
+        // Auto-swap split orientation on device rotation
+        val configuration = LocalConfiguration.current
+        val isLandscape = configuration.screenWidthDp > configuration.screenHeightDp
+        LaunchedEffect(isLandscape, useSplit) {
+            if (useSplit) {
+                val desired = if (isLandscape) SplitOrientation.Vertical else SplitOrientation.Horizontal
+                if (uiState.splitOrientation != desired) {
+                    mapViewModel.setSplitOrientation(desired)
                 }
-            } else emptyList(),
-            recordingTrail = when {
-                isRecording -> trailCoordinates
-                viewingTrackId != null -> viewingTrackCoordinates
-                else -> emptyList()
-            },
-            routeWaypoints = if (routeWaypoints.isNotEmpty()) routeWaypoints else viewingRouteWaypoints,
-            savedRouteLines = if (viewingRouteWaypoints.isNotEmpty()) listOf(viewingRouteWaypoints) else emptyList(),
-            measureLinePoints = measureLinePoints,
-            centerTarget = effectiveCenterTarget,
-            poiMarker = effectivePoiMarker,
-            onClearPoiMarker = {
-                localPoiMarker = null
-                onClearPoiMarker()
-            },
-            initialCamLat = initialCamLat,
-            initialCamLon = initialCamLon,
-            initialCamZoom = initialCamZoom,
-            onCameraMoved = { lat, lon, zoom ->
-                currentZoom = zoom
-                onCameraMoved(lat, lon, zoom)
-            },
-            onCameraIdle = { sw, ne ->
-                mapViewModel.setCameraTarget(
-                    (sw.latitude + ne.latitude) / 2.0,
-                    (sw.longitude + ne.longitude) / 2.0
-                )
-                mapViewModel.setCameraBounds(
-                    sw.latitude, sw.longitude, ne.latitude, ne.longitude, currentZoom
-                )
-                viewportBounds = BoundingBox(sw.latitude, ne.latitude, sw.longitude, ne.longitude)
-            },
-            onUserPan = { mapViewModel.setFollowMode(FollowMode.OFF) },
-            onCameraBearingChanged = { mapBearing = it },
-            followMode = uiState.followMode,
-            orientationMode = uiState.orientationMode,
-            lastKnownBearing = lastKnownBearing,
-            lookAheadFactor = lookAheadFactor,
-            lookAheadSec = uiState.lookAheadSec,
-            showLightning = uiState.showLightning,
-            showWarnings = uiState.showWarnings,
-            showRadar = uiState.showRadar,
-            radarTimeOffset = uiState.radarTimeOffset,
-            radarOpacity = uiState.radarOpacity,
-            radarProvider = radarProvider,
-            onRadarEffectiveDelay = { mapViewModel.setRadarEffectiveDelay(it) },
-            lightningStrikes = lightningStrikes,
-            warnings = warnings,
-            showAis = uiState.showAis,
-            vessels = vessels,
-            seamarksDownloaded = uiState.seamarksDownloaded,
-            showAlgae = uiState.showAlgae,
-            waterObservations = uiState.waterObservations,
-            showDepth = uiState.showDepth,
-            depthFeatures = uiState.depthFeatures,
-            emodnetDepthSamples = uiState.emodnetDepthSamples,
-            navmarkSize = uiState.navmarkSize,
-            boatIconSize = uiState.boatIconSize,
-            boatIconColor = uiState.boatIconColor,
-            isNightMode = isNightMode,
-            showVvNavmarks = uiState.fiState?.showVvNavmarks ?: true,
-            turvalaiteFeatures = uiState.fiState?.turvalaiteFeatures ?: emptyMap(),
-            turvalaitevikaFeatures = uiState.fiState?.turvalaitevikaFeatures ?: emptyMap(),
-            valosektoriFeatures = uiState.fiState?.valosektoriFeatures ?: emptyMap(),
-            vesiliikennemerkkiFeatures = uiState.fiState?.vesiliikennemerkkiFeatures ?: emptyMap(),
-            navlineFeatures = uiState.fiState?.navlineFeatures ?: emptyMap(),
-            fairwayFeatures = uiState.fiState?.fairwayFeatures ?: emptyMap(),
-            vvUsingNetwork = uiState.fiState?.vvUsingNetwork ?: false,
-            vvFetchCounter = uiState.fiState?.vvFetchCounter ?: 0,
-            showSectors = mapViewModel.isSectorVisible(isNightMode),
-            viewportBounds = viewportBounds,
-            onSeamarkClick = { lat, lng ->
-                // 1) Prefer Väylävirasto / national marine data (render-independent lookup
-                //    against the cached WfsFeature list).
-                var detail = mapViewModel.findSeamarkAt(lat, lng)
-                // 2) Fall back to OpenStreetMap / OpenSeaMap. For each OSM seamark hit
-                //    re-run the marine check at the OSM feature's coordinates — if a
-                //    national feature is registered at the same point, it wins.
-                if (detail == null) {
-                    val map = mapRef
-                    val osmDetail = map?.let { buildOsmSeamarkAt(it, lat, lng) }
-                    if (osmDetail != null) {
-                        val vvOverride = mapViewModel.findSeamarkAt(osmDetail.latitude, osmDetail.longitude)
-                        detail = vvOverride ?: osmDetail
-                    }
-                }
-                if (detail != null) {
-                    mapViewModel.selectSeamark(detail)
-                } else {
-                    // 3) Bare-map click logic (formerly in onMapClick).
-                    if (mockLocationPending) {
-                        mapViewModel.setMockLocation(lat, lng)
-                        mockLocationPending = false
-                    } else {
-                        val ll = LatLng(lat, lng)
-                        if (measureMode) {
-                            measurePoints = if (measurePoints.size >= 2) listOf(ll) else measurePoints + ll
-                        }
-                        if (selectedVesselMmsi != null) selectedVesselMmsi = null
-                        mapViewModel.clearSeamark()
-                    }
-                }
-            },
-            onAlgaeObservationClick = { idx ->
-                val clicked = uiState.waterObservations.getOrNull(idx)
-                if (clicked != null) {
-                    val key = "%.5f_%.5f".format(clicked.latitude, clicked.longitude)
-                    val same = uiState.waterObservations.filter {
-                        "%.5f_%.5f".format(it.latitude, it.longitude) == key
-                    }
-                    mapViewModel.selectAlgaeObservations(same)
-                }
-            },
-            onMapReady = { map -> mapRef = map },
-            onMapClick = { /* now handled in onSeamarkClick */ },
-            onVesselClick = { mmsi ->
-                selectedVesselMmsi = if (selectedVesselMmsi == mmsi) null else mmsi
-                mapViewModel.fetchVesselMetadata(mmsi)
-            },
-            onLongPress = { latlng ->
-                routeWaypoints = routeWaypoints + latlng
-            },
-            onTwoFingerMeasure = { p1, p2 ->
-                val d = app.pursi.location.SpeedCalculator.distanceBetween(
-                    p1.latitude, p1.longitude, p2.latitude, p2.longitude
-                )
-                twoFingerMeasure = d.toFloat()
-                measureLinePoints = Pair(p1, p2)
-                measureActive = true
-            },
-            onMeasureEnd = {
-                measureActive = false
             }
-        )
+        }
 
+        val mapPaneParams: @Composable (MapPaneState, (Float) -> Unit, (Double, Double, Double) -> Unit) -> Unit = { paneState, camBearingCallback, paneOnCameraMoved ->
+            PursiMapView(
+                modifier = Modifier.fillMaxSize(),
+                paneState = paneState,
+                chartOpacity = paneState.paneLayerState.chartOpacity,
+                offlineMode = offlineMode,
+                tilesDirPath = tilesDirPath,
+                chartProviders = uiState.chartProviders,
+                location = mapLocation,
+                bearingDeg = smoothedBearing,
+                speedMps = smoothedSpeed,
+                courseLineMinutes = if (courseLinesEnabled) {
+                    val kn = smoothedSpeed / 0.514f
+                    when {
+                        kn < 3f -> listOf(10, 20)
+                        kn < 10f -> listOf(5, 15)
+                        kn < 20f -> listOf(2, 10)
+                        else -> listOf(1, 5)
+                    }
+                } else emptyList(),
+                recordingTrail = when {
+                    isRecording -> trailCoordinates
+                    viewingTrackId != null -> viewingTrackCoordinates
+                    else -> emptyList()
+                },
+                routeWaypoints = if (routeWaypoints.isNotEmpty()) routeWaypoints else viewingRouteWaypoints,
+                savedRouteLines = if (viewingRouteWaypoints.isNotEmpty()) listOf(viewingRouteWaypoints) else emptyList(),
+                measureLinePoints = measureLinePoints,
+                centerTarget = effectiveCenterTarget,
+                poiMarker = effectivePoiMarker,
+                onClearPoiMarker = {
+                    localPoiMarker = null
+                    onClearPoiMarker()
+                },
+                onCameraMoved = { lat, lon, zoom ->
+                    currentZoom = zoom
+                    paneOnCameraMoved(lat, lon, zoom)
+                    onCameraMoved(lat, lon, zoom)
+                },
+                onCameraIdle = { sw, ne ->
+                    mapViewModel.setCameraTarget(
+                        (sw.latitude + ne.latitude) / 2.0,
+                        (sw.longitude + ne.longitude) / 2.0
+                    )
+                    mapViewModel.setCameraBounds(
+                        sw.latitude, sw.longitude, ne.latitude, ne.longitude, currentZoom
+                    )
+                    viewportBounds = BoundingBox(sw.latitude, ne.latitude, sw.longitude, ne.longitude)
+                },
+                onUserPan = { mapViewModel.setFollowMode(FollowMode.OFF) },
+                onCameraBearingChanged = camBearingCallback,
+                lastKnownBearing = lastKnownBearing,
+                lookAheadFactor = lookAheadFactor,
+                lookAheadSec = uiState.lookAheadSec,
+                showLightning = paneState.paneLayerState.showLightning,
+                showWarnings = paneState.paneLayerState.showWarnings,
+                showRadar = paneState.paneLayerState.showRadar,
+                radarTimeOffset = paneState.paneLayerState.radarTimeOffset,
+                radarOpacity = paneState.paneLayerState.radarOpacity,
+                radarProvider = radarProvider,
+                onRadarEffectiveDelay = { mapViewModel.setRadarEffectiveDelay(it) },
+                lightningStrikes = lightningStrikes,
+                warnings = warnings,
+                showAis = paneState.paneLayerState.showAis,
+                vessels = vessels,
+                seamarksDownloaded = uiState.seamarksDownloaded,
+                downloadedSeamarkContinents = uiState.downloadedSeamarkContinents,
+                showAlgae = paneState.paneLayerState.showAlgae,
+                waterObservations = uiState.waterObservations,
+                showDepth = paneState.paneLayerState.showDepth,
+                depthFeatures = uiState.depthFeatures,
+                emodnetDepthSamples = uiState.emodnetDepthSamples,
+                navmarkSize = paneState.paneLayerState.navmarkSize,
+                boatIconSize = paneState.paneLayerState.boatIconSize,
+                boatIconColor = paneState.paneLayerState.boatIconColor,
+                isNightMode = isNightMode,
+                showVvNavmarks = paneState.paneLayerState.showVvNavmarks,
+                turvalaiteFeatures = uiState.fiState?.turvalaiteFeatures ?: emptyMap(),
+                turvalaitevikaFeatures = uiState.fiState?.turvalaitevikaFeatures ?: emptyMap(),
+                valosektoriFeatures = uiState.fiState?.valosektoriFeatures ?: emptyMap(),
+                vesiliikennemerkkiFeatures = uiState.fiState?.vesiliikennemerkkiFeatures ?: emptyMap(),
+                navlineFeatures = uiState.fiState?.navlineFeatures ?: emptyMap(),
+                fairwayFeatures = uiState.fiState?.fairwayFeatures ?: emptyMap(),
+                vvUsingNetwork = uiState.fiState?.vvUsingNetwork ?: false,
+                vvFetchCounter = uiState.fiState?.vvFetchCounter ?: 0,
+                showSectors = mapViewModel.isSectorVisible(isNightMode),
+                viewportBounds = viewportBounds,
+                onSeamarkClick = { lat, lng ->
+                    var detail = mapViewModel.findSeamarkAt(lat, lng)
+                    if (detail == null) {
+                        val map = mapRef
+                        val osmDetail = map?.let { buildOsmSeamarkAt(it, lat, lng) }
+                        if (osmDetail != null) {
+                            val vvOverride = mapViewModel.findSeamarkAt(osmDetail.latitude, osmDetail.longitude)
+                            detail = vvOverride ?: osmDetail
+                        }
+                    }
+                    if (detail != null) {
+                        mapViewModel.selectSeamark(detail)
+                    } else {
+                        if (mockLocationPending) {
+                            mapViewModel.setMockLocation(lat, lng)
+                            mockLocationPending = false
+                        } else {
+                            val ll = LatLng(lat, lng)
+                            if (measureMode) {
+                                measurePoints = if (measurePoints.size >= 2) listOf(ll) else measurePoints + ll
+                            }
+                            if (selectedVesselMmsi != null) selectedVesselMmsi = null
+                            mapViewModel.clearSeamark()
+                        }
+                    }
+                },
+                onAlgaeObservationClick = { idx ->
+                    val clicked = uiState.waterObservations.getOrNull(idx)
+                    if (clicked != null) {
+                        val key = "%.5f_%.5f".format(clicked.latitude, clicked.longitude)
+                        val same = uiState.waterObservations.filter {
+                            "%.5f_%.5f".format(it.latitude, it.longitude) == key
+                        }
+                        mapViewModel.selectAlgaeObservations(same)
+                    }
+                },
+                onMapReady = { map -> mapRef = map },
+                onMapClick = { },
+                onVesselClick = { mmsi ->
+                    selectedVesselMmsi = if (selectedVesselMmsi == mmsi) null else mmsi
+                    mapViewModel.fetchVesselMetadata(mmsi)
+                },
+                onLongPress = { latlng ->
+                    if (navState.isActive) {
+                        val idx = (navState.currentIndex + 1).coerceAtMost(routeWaypoints.size)
+                        routeWaypoints = routeWaypoints.toMutableList().also { it.add(idx, latlng) }
+                    } else {
+                        routeWaypoints = routeWaypoints + latlng
+                    }
+                },
+                onTwoFingerMeasure = { p1, p2 ->
+                    val d = app.pursi.location.SpeedCalculator.distanceBetween(
+                        p1.latitude, p1.longitude, p2.latitude, p2.longitude
+                    )
+                    twoFingerMeasure = d.toFloat()
+                    measureLinePoints = Pair(p1, p2)
+                    measureActive = true
+                },
+                onMeasureEnd = {
+                    measureActive = false
+                },
+                navigationState = navState,
+                lastLocation = location?.let { LatLng(it.latitude, it.longitude) },
+                dragWaypointIndex = dragWaypointIndex,
+                onWaypointDragStart = { idx, _, _ ->
+                    dragWaypointIndex = idx
+                },
+                onWaypointDragMove = { idx, lat, lon ->
+                    routeWaypoints = routeWaypoints.toMutableList().also { it[idx] = LatLng(lat, lon) }
+                },
+                onWaypointDragEnd = {
+                    dragWaypointIndex = null
+                }
+            )
+        }
+
+        if (!useSplit) {
+            mapPaneParams(
+                MapPaneState(
+                    centerTrigger = centerTrigger,
+                    zoomToBoatTrigger = zoomToBoatTrigger,
+                    zoomToBoatLevel = zoomToBoatLevel,
+                    followMode = uiState.followMode,
+                    orientationMode = uiState.orientationMode,
+                    initialCamLat = initialCamLat,
+                    initialCamLon = initialCamLon,
+                    initialCamZoom = initialCamZoom,
+                    paneLayerState = uiState.toPaneLayerState(),
+                ),
+                { mapBearing = it },
+                { _, _, _ -> }
+            )
+        } else {
+            val orientation = uiState.splitOrientation
+            val fraction = uiState.splitFraction
+            val animFraction by animateFloatAsState(
+                targetValue = fraction,
+                animationSpec = tween(durationMillis = 200),
+                label = "splitAnim"
+            )
+
+            val isCollapsed = fraction == 0f || fraction == 1f
+            val paneACollapsed = fraction == 0f
+
+            val onSwapPanes = {
+                val tmpCt = centerTrigger; centerTrigger = pane2CenterTrigger; pane2CenterTrigger = tmpCt
+                val tmpZt = zoomToBoatTrigger; zoomToBoatTrigger = pane2ZoomToBoatTrigger; pane2ZoomToBoatTrigger = tmpZt
+                val tmpZl = zoomToBoatLevel; zoomToBoatLevel = pane2ZoomToBoatLevel; pane2ZoomToBoatLevel = tmpZl
+            }
+
+            // Per-pane orientation labels in split mode
+            val paneAOrientationLabelText = when (paneALayerState.orientationMode) {
+                OrientationMode.NORTH_UP -> stringResource(app.pursi.R.string.nav_north_up)
+                OrientationMode.COURSE_UP -> stringResource(app.pursi.R.string.nav_course_up)
+            }
+            var paneAOrientationLabel by remember { mutableStateOf<String?>(null) }
+            LaunchedEffect(paneALayerState.orientationMode) {
+                paneAOrientationLabel = paneAOrientationLabelText
+                kotlinx.coroutines.delay(2000)
+                if (paneAOrientationLabel != null) paneAOrientationLabel = null
+            }
+
+            val paneBOrientationLabelText = when (paneBLayerState.orientationMode) {
+                OrientationMode.NORTH_UP -> stringResource(app.pursi.R.string.nav_north_up)
+                OrientationMode.COURSE_UP -> stringResource(app.pursi.R.string.nav_course_up)
+            }
+            var paneBOrientationLabel by remember { mutableStateOf<String?>(null) }
+            LaunchedEffect(paneBLayerState.orientationMode) {
+                paneBOrientationLabel = paneBOrientationLabelText
+                kotlinx.coroutines.delay(2000)
+                if (paneBOrientationLabel != null) paneBOrientationLabel = null
+            }
+
+            if (isCollapsed) {
+                Box(Modifier.fillMaxSize()) {
+                    if (paneACollapsed) {
+                        Box(Modifier.fillMaxSize()) {
+                            mapPaneParams(
+                                MapPaneState(
+                                    centerTrigger = pane2CenterTrigger,
+                                    zoomToBoatTrigger = pane2ZoomToBoatTrigger,
+                                    zoomToBoatLevel = pane2ZoomToBoatLevel,
+                                    followMode = uiState.followMode,
+                                    orientationMode = paneBLayerState.orientationMode,
+                                    initialCamLat = paneBInitialCam.first,
+                                    initialCamLon = paneBInitialCam.second,
+                                    initialCamZoom = paneBInitialCam.third,
+                                    paneLayerState = paneBLayerState,
+                                ),
+                                { pane2Bearing = it },
+                                { lat, lon, zoom -> mapViewModel.setPaneCamera("b", lat, lon, zoom) }
+                            )
+                            PaneControls(
+                                paneBearing = pane2Bearing,
+                                orientationLabel = paneBOrientationLabel,
+                                onZoomIn = {
+                                    pane2ZoomToBoatLevel = (pane2ZoomToBoatLevel + 0.5f).coerceAtMost(18f)
+                                    pane2ZoomToBoatTrigger++
+                                },
+                                onZoomOut = {
+                                    pane2ZoomToBoatLevel = (pane2ZoomToBoatLevel - 0.5f).coerceAtLeast(4f)
+                                    pane2ZoomToBoatTrigger++
+                                },
+                                onCenterLocation = {
+                                    mapViewModel.centerOnLocation()
+                                    pane2CenterTrigger++
+                                },
+                                onCompassClick = { mapViewModel.cyclePaneOrientationMode("b") },
+                                onLayersToggle = { layersTargetPane = false },
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        }
+                    } else {
+                        Box(Modifier.fillMaxSize()) {
+                            mapPaneParams(
+                                MapPaneState(
+                                    centerTrigger = centerTrigger,
+                                    zoomToBoatTrigger = zoomToBoatTrigger,
+                                    zoomToBoatLevel = zoomToBoatLevel,
+                                    followMode = uiState.followMode,
+                                    orientationMode = paneALayerState.orientationMode,
+                                    initialCamLat = paneAInitialCam.first,
+                                    initialCamLon = paneAInitialCam.second,
+                                    initialCamZoom = paneAInitialCam.third,
+                                    paneLayerState = paneALayerState,
+                                ),
+                                { mapBearing = it },
+                                { lat, lon, zoom -> mapViewModel.setPaneCamera("a", lat, lon, zoom) }
+                            )
+                            PaneControls(
+                                paneBearing = mapBearing,
+                                orientationLabel = paneAOrientationLabel,
+                                onZoomIn = {
+                                    zoomToBoatLevel = (currentZoom.toFloat() + 0.5f).coerceAtMost(18f)
+                                    zoomToBoatTrigger++
+                                },
+                                onZoomOut = {
+                                    zoomToBoatLevel = (currentZoom.toFloat() - 0.5f).coerceAtLeast(4f)
+                                    zoomToBoatTrigger++
+                                },
+                                onCenterLocation = {
+                                    mapViewModel.centerOnLocation()
+                                    centerTrigger++
+                                },
+                                onCompassClick = { mapViewModel.cyclePaneOrientationMode("a") },
+                                onLayersToggle = { layersTargetPane = true },
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        }
+                    }
+                    RestoreStrip(
+                        orientation = orientation,
+                        paneACollapsed = paneACollapsed,
+                        onRestore = { mapViewModel.setSplitFraction(0.5f) },
+                        modifier = Modifier.align(
+                            when {
+                                orientation == SplitOrientation.Vertical && paneACollapsed -> Alignment.CenterStart
+                                orientation == SplitOrientation.Vertical -> Alignment.CenterEnd
+                                paneACollapsed -> Alignment.TopCenter
+                                else -> Alignment.BottomCenter
+                            }
+                        )
+                    )
+                }
+            } else if (orientation == SplitOrientation.Vertical) {
+                var rowWidthPx by remember { mutableStateOf(0f) }
+                Row(
+                    Modifier
+                        .fillMaxSize()
+                        .onSizeChanged { rowWidthPx = it.width.toFloat() }
+                ) {
+                    Box(Modifier.weight(animFraction.coerceAtLeast(0.001f)).fillMaxHeight()) {
+                        Box(Modifier.fillMaxSize()) {
+                            mapPaneParams(
+                                MapPaneState(
+                                    centerTrigger = centerTrigger,
+                                    zoomToBoatTrigger = zoomToBoatTrigger,
+                                    zoomToBoatLevel = zoomToBoatLevel,
+                                    followMode = uiState.followMode,
+                                    orientationMode = paneALayerState.orientationMode,
+                                    initialCamLat = paneAInitialCam.first,
+                                    initialCamLon = paneAInitialCam.second,
+                                    initialCamZoom = paneAInitialCam.third,
+                                    paneLayerState = paneALayerState,
+                                ),
+                                { mapBearing = it },
+                                { lat, lon, zoom -> mapViewModel.setPaneCamera("a", lat, lon, zoom) }
+                            )
+                            PaneControls(
+                                paneBearing = mapBearing,
+                                orientationLabel = paneAOrientationLabel,
+                                onZoomIn = {
+                                    zoomToBoatLevel = (currentZoom.toFloat() + 0.5f).coerceAtMost(18f)
+                                    zoomToBoatTrigger++
+                                },
+                                onZoomOut = {
+                                    zoomToBoatLevel = (currentZoom.toFloat() - 0.5f).coerceAtLeast(4f)
+                                    zoomToBoatTrigger++
+                                },
+                                onCenterLocation = {
+                                    mapViewModel.centerOnLocation()
+                                    centerTrigger++
+                                },
+                                onCompassClick = { mapViewModel.cyclePaneOrientationMode("a") },
+                                onLayersToggle = { layersTargetPane = true },
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        }
+                    }
+                    SplitterHandle(
+                        orientation = orientation,
+                        splitFraction = fraction,
+                        parentSizePx = rowWidthPx,
+                        onFractionChange = { mapViewModel.setSplitFraction(it) },
+                        onFractionCommit = { mapViewModel.setSplitFraction(it) },
+                        onSwapPanes = onSwapPanes
+                    )
+                    Box(Modifier.weight((1f - animFraction).coerceAtLeast(0.001f)).fillMaxHeight()) {
+                        Box(Modifier.fillMaxSize()) {
+                            mapPaneParams(
+                                MapPaneState(
+                                    centerTrigger = pane2CenterTrigger,
+                                    zoomToBoatTrigger = pane2ZoomToBoatTrigger,
+                                    zoomToBoatLevel = pane2ZoomToBoatLevel,
+                                    followMode = uiState.followMode,
+                                    orientationMode = paneBLayerState.orientationMode,
+                                    initialCamLat = paneBInitialCam.first,
+                                    initialCamLon = paneBInitialCam.second,
+                                    initialCamZoom = paneBInitialCam.third,
+                                    paneLayerState = paneBLayerState,
+                                ),
+                                { pane2Bearing = it },
+                                { lat, lon, zoom -> mapViewModel.setPaneCamera("b", lat, lon, zoom) }
+                            )
+                            PaneControls(
+                                paneBearing = pane2Bearing,
+                                orientationLabel = paneBOrientationLabel,
+                                onZoomIn = {
+                                    pane2ZoomToBoatLevel = (pane2ZoomToBoatLevel + 0.5f).coerceAtMost(18f)
+                                    pane2ZoomToBoatTrigger++
+                                },
+                                onZoomOut = {
+                                    pane2ZoomToBoatLevel = (pane2ZoomToBoatLevel - 0.5f).coerceAtLeast(4f)
+                                    pane2ZoomToBoatTrigger++
+                                },
+                                onCenterLocation = {
+                                    mapViewModel.centerOnLocation()
+                                    pane2CenterTrigger++
+                                },
+                                onCompassClick = { mapViewModel.cyclePaneOrientationMode("b") },
+                                onLayersToggle = { layersTargetPane = false },
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        }
+                    }
+                }
+            } else {
+                    var colHeightPx by remember { mutableStateOf(0f) }
+                    Column(
+                        Modifier
+                            .fillMaxSize()
+                            .onSizeChanged { colHeightPx = it.height.toFloat() }
+                    ) {
+                        Box(Modifier.weight(animFraction.coerceAtLeast(0.001f)).fillMaxWidth()) {
+                            Box(Modifier.fillMaxSize()) {
+                                mapPaneParams(
+                                    MapPaneState(
+                                        centerTrigger = centerTrigger,
+                                        zoomToBoatTrigger = zoomToBoatTrigger,
+                                        zoomToBoatLevel = zoomToBoatLevel,
+                                        followMode = uiState.followMode,
+                                        orientationMode = paneALayerState.orientationMode,
+                                        initialCamLat = paneAInitialCam.first,
+                                        initialCamLon = paneAInitialCam.second,
+                                        initialCamZoom = paneAInitialCam.third,
+                                        paneLayerState = paneALayerState,
+                                    ),
+                                    { mapBearing = it },
+                                    { lat, lon, zoom -> mapViewModel.setPaneCamera("a", lat, lon, zoom) }
+                                )
+                                PaneControls(
+                                    paneBearing = mapBearing,
+                                    orientationLabel = paneAOrientationLabel,
+                                    onZoomIn = {
+                                        zoomToBoatLevel = (currentZoom.toFloat() + 0.5f).coerceAtMost(18f)
+                                        zoomToBoatTrigger++
+                                    },
+                                    onZoomOut = {
+                                        zoomToBoatLevel = (currentZoom.toFloat() - 0.5f).coerceAtLeast(4f)
+                                        zoomToBoatTrigger++
+                                    },
+                                    onCenterLocation = {
+                                        mapViewModel.centerOnLocation()
+                                        centerTrigger++
+                                    },
+                                    onCompassClick = { mapViewModel.cyclePaneOrientationMode("a") },
+                                    onLayersToggle = { layersTargetPane = true },
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            }
+                        }
+                        SplitterHandle(
+                        orientation = orientation,
+                        splitFraction = fraction,
+                        parentSizePx = colHeightPx,
+                        onFractionChange = { mapViewModel.setSplitFraction(it) },
+                        onFractionCommit = { mapViewModel.setSplitFraction(it) },
+                        onSwapPanes = onSwapPanes
+                    )
+                    Box(Modifier.weight((1f - animFraction).coerceAtLeast(0.001f)).fillMaxWidth()) {
+                        Box(Modifier.fillMaxSize()) {
+                            mapPaneParams(
+                                MapPaneState(
+                                    centerTrigger = pane2CenterTrigger,
+                                    zoomToBoatTrigger = pane2ZoomToBoatTrigger,
+                                    zoomToBoatLevel = pane2ZoomToBoatLevel,
+                                    followMode = uiState.followMode,
+                                    orientationMode = paneBLayerState.orientationMode,
+                                    initialCamLat = paneBInitialCam.first,
+                                    initialCamLon = paneBInitialCam.second,
+                                    initialCamZoom = paneBInitialCam.third,
+                                    paneLayerState = paneBLayerState,
+                                ),
+                                { pane2Bearing = it },
+                                { lat, lon, zoom -> mapViewModel.setPaneCamera("b", lat, lon, zoom) }
+                            )
+                            PaneControls(
+                                paneBearing = pane2Bearing,
+                                orientationLabel = paneBOrientationLabel,
+                                onZoomIn = {
+                                    pane2ZoomToBoatLevel = (pane2ZoomToBoatLevel + 0.5f).coerceAtMost(18f)
+                                    pane2ZoomToBoatTrigger++
+                                },
+                                onZoomOut = {
+                                    pane2ZoomToBoatLevel = (pane2ZoomToBoatLevel - 0.5f).coerceAtLeast(4f)
+                                    pane2ZoomToBoatTrigger++
+                                },
+                                onCenterLocation = {
+                                    mapViewModel.centerOnLocation()
+                                    pane2CenterTrigger++
+                                },
+                                onCompassClick = { mapViewModel.cyclePaneOrientationMode("b") },
+                                onLayersToggle = { layersTargetPane = false },
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        }
+                    }
+                }
+            }
+        }
 
         TopBarOverlay(
             smoothedSpeed = smoothedSpeed,
@@ -553,11 +968,13 @@ fun MapScreen(
             onWarningClick = {
                 mapViewModel.requestWeatherTab(2)
                 onNavigateToWarnings()
-            }
+            },
+            showCompass = !uiState.splitMode
         )
 
         MapControls(
             currentZoom = currentZoom,
+            splitMode = uiState.splitMode,
             recordingData = RecordingData(isRecording, recordingDistanceNm, recordingElapsed),
             showLayersPanel = showLayersPanel,
             showRadarSlider = showRadarSlider,
@@ -615,36 +1032,89 @@ fun MapScreen(
                     mapViewModel.setRadarTimeOffset(0)
                 }
                 showRadarSlider = !showRadarSlider
-            }
+            },
+            onSplitToggle = { mapViewModel.toggleSplitMode() }
         )
 
-        if (showLayersPanel) {
+        if (showLayersPanel || layersTargetPane != null) {
+            val targetIsPaneA = layersTargetPane == true
+            val targetIsPaneB = layersTargetPane == false
+            val targetState = when {
+                targetIsPaneA -> paneALayerState
+                targetIsPaneB -> paneBLayerState
+                else -> uiState.toPaneLayerState()
+            }
+            val onDismiss = {
+                showLayersPanel = false
+                layersTargetPane = null
+            }
             Box(
                 Modifier
                     .fillMaxSize()
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null
-                    ) { showLayersPanel = false }
+                    ) { onDismiss() }
             )
             LayersPanel(
-                chartOpacity = chartOpacity,
-                showRadar = uiState.showRadar,
-                showAis = uiState.showAis,
+                chartOpacity = targetState.chartOpacity,
+                showRadar = targetState.showRadar,
+                showAis = targetState.showAis,
                 vesselCount = vessels.size,
-                showDepth = uiState.showDepth,
-                showWindMeter = uiState.showWindMeter,
-                showAlgae = uiState.showAlgae,
-                onChartOpacityChange = { chartOpacity = it },
-                onChartOpacityFinished = {
-                    prefs.edit().putFloat(KEY_CHART_OPACITY, chartOpacity).apply()
-                    mapViewModel.setChartOpacity(chartOpacity)
+                showDepth = targetState.showDepth,
+                showWindMeter = targetState.showWindMeter,
+                showAlgae = targetState.showAlgae,
+                onChartOpacityChange = { newOpacity ->
+                    when {
+                        targetIsPaneA -> mapViewModel.setPaneALayerState(targetState.copy(chartOpacity = newOpacity))
+                        targetIsPaneB -> mapViewModel.setPaneBLayerState(targetState.copy(chartOpacity = newOpacity))
+                        else -> chartOpacity = newOpacity
+                    }
                 },
-                onToggleRadar = { mapViewModel.toggleRainAndLightning() },
-                onToggleAis = { mapViewModel.toggleShowAis() },
-                onToggleDepth = { mapViewModel.toggleShowDepth() },
-                onToggleWindMeter = { mapViewModel.toggleShowWindMeter() },
-                onToggleAlgae = { mapViewModel.toggleShowAlgae() },
+                onChartOpacityFinished = {
+                    val final = when {
+                        targetIsPaneA -> paneALayerState.chartOpacity
+                        targetIsPaneB -> paneBLayerState.chartOpacity
+                        else -> chartOpacity
+                    }
+                    prefs.edit().putFloat(KEY_CHART_OPACITY, final).apply()
+                    mapViewModel.setChartOpacity(final)
+                },
+                onToggleRadar = {
+                    when {
+                        targetIsPaneA -> mapViewModel.setPaneALayerState(targetState.copy(showRadar = !targetState.showRadar))
+                        targetIsPaneB -> mapViewModel.setPaneBLayerState(targetState.copy(showRadar = !targetState.showRadar))
+                        else -> mapViewModel.toggleRainAndLightning()
+                    }
+                },
+                onToggleAis = {
+                    when {
+                        targetIsPaneA -> mapViewModel.setPaneALayerState(targetState.copy(showAis = !targetState.showAis))
+                        targetIsPaneB -> mapViewModel.setPaneBLayerState(targetState.copy(showAis = !targetState.showAis))
+                        else -> mapViewModel.toggleShowAis()
+                    }
+                },
+                onToggleDepth = {
+                    when {
+                        targetIsPaneA -> mapViewModel.setPaneALayerState(targetState.copy(showDepth = !targetState.showDepth))
+                        targetIsPaneB -> mapViewModel.setPaneBLayerState(targetState.copy(showDepth = !targetState.showDepth))
+                        else -> mapViewModel.toggleShowDepth()
+                    }
+                },
+                onToggleWindMeter = {
+                    when {
+                        targetIsPaneA -> mapViewModel.setPaneALayerState(targetState.copy(showWindMeter = !targetState.showWindMeter))
+                        targetIsPaneB -> mapViewModel.setPaneBLayerState(targetState.copy(showWindMeter = !targetState.showWindMeter))
+                        else -> mapViewModel.toggleShowWindMeter()
+                    }
+                },
+                onToggleAlgae = {
+                    when {
+                        targetIsPaneA -> mapViewModel.setPaneALayerState(targetState.copy(showAlgae = !targetState.showAlgae))
+                        targetIsPaneB -> mapViewModel.setPaneBLayerState(targetState.copy(showAlgae = !targetState.showAlgae))
+                        else -> mapViewModel.toggleShowAlgae()
+                    }
+                },
                 bottomInsetPx = bottomInsetPx,
                 modifier = Modifier.align(Alignment.BottomCenter)
             )
@@ -666,13 +1136,29 @@ fun MapScreen(
             val showReportButton = routeWaypoints.isNotEmpty() &&
                 lastWp != null &&
                 Regions.FINLAND.contains(lastWp.latitude, lastWp.longitude)
+            val configuration = LocalConfiguration.current
+            val density = LocalDensity.current
+            val screenW = with(density) { configuration.screenWidthDp.dp.toPx() }
+            val screenH = with(density) { configuration.screenHeightDp.dp.toPx() }
+            val bottomPad = with(density) { bottomInsetPx.toPx() }
             RouteActionCard(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(bottom = bottomInsetPx + 80.dp),
+                    .offset { IntOffset(routeCardDragX.toInt(), routeCardDragY.toInt()) }
+                    .padding(bottom = 0.dp)
+                    .pointerInput(Unit) {
+                        detectDragGestures { change, dragAmount ->
+                            change.consume()
+                            routeCardDragX = (routeCardDragX + dragAmount.x)
+                                .coerceIn(-screenW * 0.45f, screenW * 0.45f)
+                            routeCardDragY = (routeCardDragY + dragAmount.y)
+                                .coerceIn(-screenH + bottomPad, screenH * 0.45f)
+                        }
+                    },
                 waypoints = activeWps,
                 defaultBoat = defaultBoat,
                 isPlanningMode = routeWaypoints.isNotEmpty(),
+                isViewingSavedRoute = viewingRouteWaypoints.isNotEmpty() && !navState.isActive,
                 label = cardLabel,
                 showReportButton = showReportButton,
                 onReportObservation = {
@@ -685,6 +1171,13 @@ fun MapScreen(
                     routeName = "Route ${SimpleDateFormat("d.M.yyyy", Locale.getDefault()).format(Date())}"
                     showRouteSaveDialog = true
                 },
+                onEdit = {
+                    routeWaypoints = viewingRouteWaypoints.toList()
+                    viewingRouteWaypoints = emptyList()
+                    mapViewModel.setViewingRouteId(null)
+                    routeCardDragX = 0f
+                    routeCardDragY = 0f
+                },
                 onClose = {
                     when {
                         viewingRouteWaypoints.isNotEmpty() -> {
@@ -696,6 +1189,17 @@ fun MapScreen(
                             onClearViewingTrack()
                         }
                     }
+                },
+                navigationState = navState,
+                onStartNavigate = {
+                    val wps = if (routeWaypoints.isNotEmpty()) routeWaypoints else viewingRouteWaypoints
+                    mapViewModel.startNavigation(wps)
+                },
+                onStopNavigate = {
+                    mapViewModel.stopNavigation()
+                },
+                onNavigateWaypoint = { idx ->
+                    mapViewModel.setCurrentWaypoint(idx)
                 }
             )
         }
@@ -713,6 +1217,15 @@ fun MapScreen(
             )
         }
 
+        if (navState.isActive) {
+            NavigationBearingArrow(
+                navState = navState,
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = 16.dp)
+            )
+        }
+
         RouteSaveDialog(
             showDialog = showRouteSaveDialog,
             routeName = routeName,
@@ -721,26 +1234,25 @@ fun MapScreen(
                 scope.launch {
                     try {
                         val routeId = UUID.randomUUID().toString()
-                        mapViewModel.savedRouteDao.insert(SavedRoute(
-                            id = routeId, name = routeName, waypointCount = routeWaypoints.size,
-                            totalDistanceNm = {
-                                var d = 0.0
-                                for (i in 0 until routeWaypoints.size - 1)
-                                    d += app.pursi.location.SpeedCalculator.distanceNm(
-                                        routeWaypoints[i].latitude, routeWaypoints[i].longitude,
-                                        routeWaypoints[i + 1].latitude, routeWaypoints[i + 1].longitude
-                                    )
-                                d
-                            }(),
-                            boatId = defaultBoat?.id
-                        ))
-                        routeWaypoints.forEachIndexed { i, p ->
-                            mapViewModel.savedRouteDao.insertWaypoint(RouteWaypoint(
-                                routeId = routeId, name = "WP ${i + 1}",
-                                latitude = p.latitude, longitude = p.longitude, order = i
-                            ))
+                        val waypoints = routeWaypoints.mapIndexed { i, p ->
+                            RouteWaypoint(routeId = "", name = "WP ${i + 1}", latitude = p.latitude, longitude = p.longitude, order = i)
                         }
+                        val totalNm = if (routeWaypoints.size >= 2) {
+                            var d = 0.0
+                            for (i in 0 until routeWaypoints.size - 1)
+                                d += app.pursi.location.SpeedCalculator.distanceNm(
+                                    routeWaypoints[i].latitude, routeWaypoints[i].longitude,
+                                    routeWaypoints[i + 1].latitude, routeWaypoints[i + 1].longitude
+                                )
+                            d
+                        } else 0.0
+                        mapViewModel.savedRouteDao.insertWithWaypoints(
+                            SavedRoute(id = routeId, name = routeName, waypointCount = routeWaypoints.size,
+                                totalDistanceNm = totalNm, boatId = defaultBoat?.id),
+                            waypoints
+                        )
                         routeWaypoints = emptyList()
+                        mapViewModel.setViewingRouteId(routeId)
                     } catch (_: Exception) {
                         scope.showUserError(context, snackbarHostState, app.pursi.R.string.save_route_failed)
                     }
@@ -823,6 +1335,11 @@ fun MapScreen(
             radarProviderId = radarProvider?.providerId ?: "null",
             radarTimeOffset = uiState.radarTimeOffset,
             showRadarSlider = showRadarSlider,
+            mapViewCount = app.pursi.map.MapViewRegistry.activeCount,
+            heapMb = (Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory()).toInt() / (1024 * 1024),
+            spriteCacheCount = app.pursi.map.SpriteCacheRegistry.trackedCount,
+            depthFeatureCount = uiState.depthFeatures.values.sumOf { it.size },
+            turvalaiteFeatureCount = uiState.fiState?.turvalaiteFeatures?.values?.sumOf { it.size } ?: 0,
             onMockGpsToggle = {
                 if (isMockLocation) {
                     mapViewModel.centerOnLocation()

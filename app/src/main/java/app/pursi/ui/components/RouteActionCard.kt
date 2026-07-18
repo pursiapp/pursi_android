@@ -1,17 +1,22 @@
 package app.pursi.ui.components
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Navigation
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Undo
 import androidx.compose.material3.Card
@@ -30,6 +35,7 @@ import androidx.compose.ui.unit.dp
 import app.pursi.data.model.Boat
 import app.pursi.navigation.RoutePlanner
 import app.pursi.location.SpeedCalculator
+import app.pursi.ui.viewmodel.NavigationState
 import org.maplibre.android.geometry.LatLng
 import app.pursi.R
 
@@ -39,13 +45,19 @@ fun RouteActionCard(
     waypoints: List<LatLng>,
     defaultBoat: Boat?,
     isPlanningMode: Boolean,
+    isViewingSavedRoute: Boolean = false,
     label: String? = null,
     showReportButton: Boolean = false,
     onReportObservation: () -> Unit = {},
     onUndo: () -> Unit,
     onClear: () -> Unit,
     onSave: () -> Unit,
-    onClose: () -> Unit
+    onClose: () -> Unit,
+    onEdit: () -> Unit = {},
+    navigationState: NavigationState = NavigationState(),
+    onStartNavigate: () -> Unit = {},
+    onStopNavigate: () -> Unit = {},
+    onNavigateWaypoint: (Int) -> Unit = {}
 ) {
     val distNm = if (waypoints.size >= 2) {
         var d = 0.0
@@ -62,49 +74,100 @@ fun RouteActionCard(
 
     Card(
         modifier = modifier
-            .widthIn(max = 340.dp),
+            .widthIn(max = if (navigationState.isActive) 280.dp else 340.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f)),
         shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp)
     ) {
-        Column(Modifier.padding(horizontal = 12.dp, vertical = 6.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    if (label != null) {
-                        Text(
-                            label,
-                            style = MaterialTheme.typography.bodySmall,
-                            fontWeight = FontWeight.Medium
-                        )
-                        Text(
-                            "${"%.1f".format(distNm)} nm · ${waypoints.size} ${stringResource(R.string.waypoints)}",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                        )
-                    } else {
-                        Text(
-                            "${stringResource(R.string.route_pts, waypoints.size)} · ${"%.1f".format(distNm)} nm",
-                            style = MaterialTheme.typography.bodySmall,
-                            fontWeight = FontWeight.Medium
-                        )
-                    }
-                    eta?.let { e ->
-                        Text(
-                            RoutePlanner.formatTimeEstimate(e),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                        )
-                    }
+        Column(Modifier.padding(horizontal = 10.dp, vertical = 4.dp)) {
+            if (navigationState.isActive) {
+                val wp = if (navigationState.waypoints.isNotEmpty())
+                    "WP ${navigationState.currentIndex + 1}/${navigationState.waypoints.size}" else ""
+                Text(
+                    "${"%.1f".format(navigationState.distanceToWpNm)} nm · $wp",
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.Medium
+                )
+                Text(
+                    "ETA ${RoutePlanner.formatTimeEstimate(navigationState.etaHours)} · ${"%.1f".format(navigationState.totalDistanceRemainingNm)} nm",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                )
+            } else if (label != null) {
+                Text(
+                    label,
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.Medium
+                )
+                Text(
+                    "${"%.1f".format(distNm)} nm · ${waypoints.size} ${stringResource(R.string.waypoints)}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                )
+            } else {
+                Text(
+                    "${stringResource(R.string.route_pts, waypoints.size)} · ${"%.1f".format(distNm)} nm",
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+            if (!navigationState.isActive) {
+                eta?.let { e ->
+                    Text(
+                        RoutePlanner.formatTimeEstimate(e),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                    )
                 }
-                Spacer(Modifier.width(8.dp))
-                if (isPlanningMode) {
+            }
+
+            Spacer(Modifier.height(2.dp))
+
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (navigationState.isActive) {
+                    val navWps = navigationState.waypoints
+                    val curIdx = navigationState.currentIndex
+                    if (navWps.isNotEmpty() && curIdx > 0) {
+                        IconButton(onClick = { onNavigateWaypoint(curIdx - 1) }, modifier = Modifier.size(28.dp)) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.prev_waypoint), modifier = Modifier.size(20.dp))
+                        }
+                    }
+                    if (navWps.isNotEmpty() && curIdx < navWps.size - 1) {
+                        IconButton(onClick = { onNavigateWaypoint(curIdx + 1) }, modifier = Modifier.size(28.dp)) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowForward, stringResource(R.string.next_waypoint), modifier = Modifier.size(20.dp))
+                        }
+                    }
+                    IconButton(onClick = onStopNavigate, modifier = Modifier.size(36.dp)) {
+                        Icon(Icons.Default.Close, stringResource(R.string.stop_navigation), modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.error)
+                    }
+                    IconButton(onClick = onSave, modifier = Modifier.size(36.dp)) {
+                        Icon(Icons.Default.Save, stringResource(R.string.save_route), modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
+                    }
+                } else if (isPlanningMode) {
                     IconButton(onClick = onUndo, modifier = Modifier.size(48.dp)) {
                         Icon(Icons.Default.Undo, stringResource(R.string.undo), modifier = Modifier.size(24.dp))
                     }
                     IconButton(onClick = onClear, modifier = Modifier.size(48.dp)) {
                         Icon(Icons.Default.Delete, stringResource(R.string.clear_route), modifier = Modifier.size(24.dp), tint = MaterialTheme.colorScheme.error)
                     }
+                    if (waypoints.size >= 1) {
+                        IconButton(onClick = onStartNavigate, modifier = Modifier.size(48.dp)) {
+                            Icon(Icons.Default.Navigation, stringResource(R.string.navigate), modifier = Modifier.size(24.dp), tint = MaterialTheme.colorScheme.primary)
+                        }
+                    }
                     IconButton(onClick = onSave, modifier = Modifier.size(48.dp)) {
                         Icon(Icons.Default.Save, stringResource(R.string.save_route), modifier = Modifier.size(24.dp), tint = MaterialTheme.colorScheme.primary)
+                    }
+                } else if (isViewingSavedRoute) {
+                    if (waypoints.size >= 1) {
+                        IconButton(onClick = onStartNavigate, modifier = Modifier.size(48.dp)) {
+                            Icon(Icons.Default.Navigation, stringResource(R.string.navigate), modifier = Modifier.size(24.dp), tint = MaterialTheme.colorScheme.primary)
+                        }
+                    }
+                    IconButton(onClick = onEdit, modifier = Modifier.size(48.dp)) {
+                        Icon(Icons.Default.Edit, stringResource(R.string.edit_route), modifier = Modifier.size(24.dp))
+                    }
+                    IconButton(onClick = onClose, modifier = Modifier.size(48.dp)) {
+                        Icon(Icons.Default.Close, stringResource(R.string.close), modifier = Modifier.size(24.dp))
                     }
                 } else {
                     IconButton(onClick = onClose, modifier = Modifier.size(48.dp)) {
@@ -112,11 +175,11 @@ fun RouteActionCard(
                     }
                 }
             }
-            if (showReportButton) {
-                Spacer(Modifier.height(2.dp))
+
+            if (showReportButton && !navigationState.isActive) {
                 TextButton(
                     onClick = onReportObservation,
-                    contentPadding = PaddingValues(horizontal = 0.dp, vertical = 2.dp)
+                    contentPadding = PaddingValues(horizontal = 0.dp, vertical = 0.dp)
                 ) {
                     Text(
                         "+ " + stringResource(R.string.report_observation),

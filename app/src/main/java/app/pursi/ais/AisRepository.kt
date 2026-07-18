@@ -5,11 +5,13 @@ import app.pursi.datasource.core.AisProvider
 import app.pursi.datasource.core.SourceResolver
 import app.pursi.location.LocationStateHolder
 import app.pursi.location.SpeedCalculator
+import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -183,9 +185,27 @@ class AisRepository @Inject constructor(
             val staleCount = vessels.size - fresh.size
             if (staleCount > 0) Log.d(TAG, "Filtered out $staleCount stale vessels")
             _vessels.value = fresh
+
+            if (fresh.isNotEmpty() && _rateLimited.value == null) {
+                prefetchMetadata(fresh)
+            }
         } catch (e: kotlinx.coroutines.CancellationException) { throw e }
         catch (e: Exception) { Log.e(TAG, "AIS fetch failed", e) }
         finally { _isRefreshing.value = false }
+    }
+
+    private fun prefetchMetadata(vessels: List<AisVessel>) {
+        val withoutName = vessels.filter { it.name == null }
+        if (withoutName.isEmpty()) return
+        Log.d(TAG, "Prefetching metadata for ${withoutName.size} vessels")
+        scope.launch {
+            withoutName.chunked(5).forEach { batch ->
+                coroutineScope {
+                    batch.map { v -> async { fetchMetadata(v.mmsi) } }.forEach { it.await() }
+                }
+                delay(100)
+            }
+        }
     }
 
     /** Fetch metadata for ONE vessel (on tap) */

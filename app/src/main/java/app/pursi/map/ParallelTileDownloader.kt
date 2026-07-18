@@ -19,9 +19,10 @@ class ParallelTileDownloader(
         urlTemplate: String,
         extension: String,
         tiles: Set<TileCoordinate>,
+        subdir: String? = null,
         onProgress: (completed: Int, total: Int) -> Unit = { _, _ -> }
     ): Int = withContext(Dispatchers.IO) {
-        val pending = tiles.filter { !tileStorage.hasTile(providerId, it.z, it.x, it.y, extension) }
+        val pending = tiles.filter { !tileStorage.hasTile(providerId, it.z, it.x, it.y, extension, subdir) }
         val total = pending.size
         var completed = 0
 
@@ -29,7 +30,7 @@ class ParallelTileDownloader(
         for (chunk in chunks) {
             chunk.map { tile ->
                 async {
-                    downloadSingle(providerId, urlTemplate, extension, tile)
+                    downloadSingle(providerId, urlTemplate, extension, tile, subdir)
                 }
             }.awaitAll()
             completed += chunk.size
@@ -42,7 +43,8 @@ class ParallelTileDownloader(
         providerId: String,
         urlTemplate: String,
         extension: String,
-        tile: TileCoordinate
+        tile: TileCoordinate,
+        subdir: String? = null
     ) {
         var lastException: Exception? = null
         repeat(maxRetries) { attempt ->
@@ -55,7 +57,7 @@ class ParallelTileDownloader(
                 client.newCall(request).execute().use { response ->
                     if (response.isSuccessful) {
                         val body = response.body ?: return
-                        tileStorage.saveTile(providerId, tile.z, tile.x, tile.y, extension, body.bytes())
+                        tileStorage.saveTile(providerId, tile.z, tile.x, tile.y, extension, body.bytes(), subdir)
                         return
                     }
                     if (response.code == 404) return

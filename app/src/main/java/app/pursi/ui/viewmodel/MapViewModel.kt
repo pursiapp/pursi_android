@@ -16,6 +16,7 @@ import app.pursi.data.dao.TrackSummaryDao
 import app.pursi.data.dao.WfsFeatureDao
 import app.pursi.data.model.EmodnetDepthSample
 import app.pursi.data.model.WfsFeature
+import app.pursi.datasource.core.BoundingBox
 import app.pursi.datasource.core.ChartProvider
 import app.pursi.datasource.core.FeatureRendererRegistry
 import app.pursi.datasource.core.SourceResolver
@@ -40,6 +41,8 @@ import kotlinx.coroutines.delay
 import app.pursi.weather.sunriseSunset
 import javax.inject.Inject
 
+import app.pursi.navigation.NavigationController
+import app.pursi.navigation.XteDirection
 import app.pursi.water.WaterObservation
 import app.pursi.water.WaterObservationRepository
 
@@ -84,7 +87,36 @@ class MapViewModel @Inject constructor(
     private var hasBounds = false
     private var lastCameraLat = Double.NaN
     private var lastCameraLon = Double.NaN
+    private var prevFetchMinLat = Double.NaN
+    private var prevFetchMinLng = Double.NaN
+    private var prevFetchMaxLat = Double.NaN
+    private var prevFetchMaxLng = Double.NaN
+    private var prevFetchZoom = 0.0
     private var depthFetchJob: kotlinx.coroutines.Job? = null
+
+    // Per-pane camera persistence (dual-map view)
+    private var paneACamLat = Double.NaN
+    private var paneACamLon = Double.NaN
+    private var paneACamZoom = 7.0
+    private var paneBCamLat = Double.NaN
+    private var paneBCamLon = Double.NaN
+    private var paneBCamZoom = 7.0
+    private val camAHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private val camBHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private val paneACamSaveRunnable = Runnable {
+        prefs.edit()
+            .putFloat("cam_a_lat", paneACamLat.toFloat())
+            .putFloat("cam_a_lon", paneACamLon.toFloat())
+            .putFloat("cam_a_zoom", paneACamZoom.toFloat())
+            .apply()
+    }
+    private val paneBCamSaveRunnable = Runnable {
+        prefs.edit()
+            .putFloat("cam_b_lat", paneBCamLat.toFloat())
+            .putFloat("cam_b_lon", paneBCamLon.toFloat())
+            .putFloat("cam_b_zoom", paneBCamZoom.toFloat())
+            .apply()
+    }
     private var turvalaiteFetchJob: kotlinx.coroutines.Job? = null
     private var turvalaitevikaFetchJob: kotlinx.coroutines.Job? = null
     private val wfsRequestTimestamps = ConcurrentLinkedQueue<Long>()
@@ -130,7 +162,7 @@ class MapViewModel @Inject constructor(
                     }
                     for (p in points) {
                         p.speedOverGround?.let { speed ->
-                            val kn = speed / 0.514f
+                            val kn = app.pursi.location.SpeedCalculator.metersPerSecondToKnots(speed)
                             if (maxSpeedKn == null || kn > maxSpeedKn) maxSpeedKn = kn
                         }
                     }
@@ -273,7 +305,15 @@ class MapViewModel @Inject constructor(
             lookAheadSec = savedStateHandle.get<Int>("lookAheadSec") ?: 5,
             followMode = savedStateHandle.get<FollowMode>("followMode") ?: FollowMode.CENTERED,
             orientationMode = savedStateHandle.get<OrientationMode>("orientationMode") ?: OrientationMode.COURSE_UP,
-            seamarksDownloaded = java.io.File(context.filesDir, "seamarks.pmtiles").exists(),
+            splitMode = boolPref("splitMode", false),
+            splitOrientation = try { SplitOrientation.valueOf(
+                savedStateHandle.get<String>("splitOrientation")
+                    ?: prefs.getString("split_orientation", SplitOrientation.Vertical.name)
+                    ?: SplitOrientation.Vertical.name
+            ) } catch (_: Exception) { SplitOrientation.Vertical },
+            splitFraction = savedStateHandle.get<Float>("splitFraction") ?: prefs.getFloat("split_fraction", 0.5f),
+            seamarksDownloaded = java.io.File(context.filesDir, "seamarks.pmtiles").exists()
+                || app.pursi.map.PmtilesDownloader.CONTINENTS.any { java.io.File(context.filesDir, "seamarks_${it.id}.pmtiles").exists() },
             downloadedSeamarkContinents = app.pursi.map.PmtilesDownloader.CONTINENTS
                 .map { it.id }
                 .filter { java.io.File(context.filesDir, "seamarks_$it.pmtiles").exists() }
@@ -296,6 +336,11 @@ class MapViewModel @Inject constructor(
     )
     val uiState: StateFlow<MapUiState> = _uiState.asStateFlow()
 
+    private val _paneALayerState = MutableStateFlow(loadPaneLayerState("a"))
+    val paneALayerState: StateFlow<PaneLayerState> = _paneALayerState.asStateFlow()
+    private val _paneBLayerState = MutableStateFlow(loadPaneLayerState("b"))
+    val paneBLayerState: StateFlow<PaneLayerState> = _paneBLayerState.asStateFlow()
+
     private val _searchTarget = MutableStateFlow<LatLng?>(null)
     val searchTarget: StateFlow<LatLng?> = _searchTarget.asStateFlow()
 
@@ -304,6 +349,15 @@ class MapViewModel @Inject constructor(
 
     private val _viewingTrackId = MutableStateFlow<String?>(null)
     val viewingTrackId: StateFlow<String?> = _viewingTrackId.asStateFlow()
+
+    private val _navigationState = MutableStateFlow(NavigationState())
+    val navigationState: StateFlow<NavigationState> = _navigationState.asStateFlow()
+
+    private var navHysteresisCounter = 0
+
+    companion object {
+        private const val NAV_HYSTERESIS_TICKS = 3
+    }
 
     init {
         aisRepository.setEnabled(_uiState.value.showAis)
@@ -331,6 +385,127 @@ class MapViewModel @Inject constructor(
         _viewingTrackId.value = id
     }
 
+    fun startNavigation(waypoints: List<LatLng>) {
+        if (waypoints.isEmpty()) return
+        val totalNm = if (waypoints.size >= 2) {
+            var d = 0.0
+            for (i in 0 until waypoints.size - 1) {
+                d += NavigationController.distanceNm(waypoints[i], waypoints[i + 1])
+            }
+            d
+        } else 0.0
+
+        val speedKn = currentLocation.value?.speed?.let { app.pursi.location.SpeedCalculator.metersPerSecondToKnots(it) } ?: 0f
+        val etaH = if (speedKn > 0.5f) totalNm / speedKn else 0.0
+
+        navHysteresisCounter = 0
+
+        _navigationState.value = NavigationState(
+            isActive = true,
+            waypoints = waypoints,
+            currentIndex = 0,
+            totalDistanceRemainingNm = totalNm,
+            etaHours = etaH,
+        )
+    }
+
+    fun stopNavigation() {
+        navHysteresisCounter = 0
+        _navigationState.value = NavigationState()
+    }
+
+    fun updateNavigation(boatLat: Double, boatLon: Double, boatHeading: Float, speedKn: Float) {
+        val state = _navigationState.value
+        if (!state.isActive || state.waypoints.isEmpty()) return
+
+        val boatPos = LatLng(boatLat, boatLon)
+
+        val suggestedIndex = NavigationController.findCurrentWaypointIndex(
+            boatPos, boatHeading, state.waypoints, state.currentIndex
+        )
+
+        val newIndex: Int
+        if (suggestedIndex > state.currentIndex) {
+            navHysteresisCounter++
+            if (navHysteresisCounter >= NAV_HYSTERESIS_TICKS) {
+                navHysteresisCounter = 0
+                newIndex = suggestedIndex
+            } else {
+                newIndex = state.currentIndex
+            }
+        } else {
+            navHysteresisCounter = 0
+            newIndex = state.currentIndex
+        }
+
+        if (newIndex >= state.waypoints.size) {
+            _navigationState.value = NavigationState()
+            return
+        }
+
+        val currentWp = state.waypoints[newIndex]
+        val bearing = NavigationController.bearingTo(boatPos, currentWp)
+        val relBearing = NavigationController.relativeBearing(boatPos, boatHeading, currentWp)
+        val distNm = NavigationController.distanceNm(boatPos, currentWp)
+
+        val totalRemaining = if (newIndex < state.waypoints.size - 1) {
+            var d = distNm
+            for (i in newIndex until state.waypoints.size - 1) {
+                d += NavigationController.distanceNm(state.waypoints[i], state.waypoints[i + 1])
+            }
+            d
+        } else distNm
+
+        val etaH = if (speedKn > 0.5f) totalRemaining / speedKn else state.etaHours
+
+        var xteNm = 0.0
+        var xteDir = XteDirection.ON_TRACK
+        if (newIndex > 0) {
+            val cte = NavigationController.crossTrackError(
+                boatPos, state.waypoints[newIndex - 1], currentWp
+            )
+            xteNm = cte.xteNm
+            xteDir = cte.direction
+        }
+
+        _navigationState.value = state.copy(
+            currentIndex = newIndex,
+            bearingToWpDeg = bearing,
+            relativeBearingDeg = relBearing,
+            distanceToWpNm = distNm,
+            totalDistanceRemainingNm = totalRemaining,
+            etaHours = etaH,
+            xteNm = xteNm,
+            xteDirection = xteDir,
+        )
+    }
+
+    fun setCurrentWaypoint(index: Int) {
+        val state = _navigationState.value
+        if (!state.isActive || state.waypoints.isEmpty()) return
+        val clamped = index.coerceIn(0, state.waypoints.size - 1)
+        navHysteresisCounter = 0
+        _navigationState.value = state.copy(currentIndex = clamped)
+        val loc = currentLocation.value
+        if (loc != null) {
+            updateNavigation(
+                loc.latitude, loc.longitude,
+                loc.bearing ?: 0f,
+                app.pursi.location.SpeedCalculator.metersPerSecondToKnots(loc.speed)
+            )
+        }
+    }
+
+    fun advanceWaypoint() {
+        val idx = _navigationState.value.currentIndex
+        setCurrentWaypoint(idx + 1)
+    }
+
+    fun previousWaypoint() {
+        val idx = _navigationState.value.currentIndex
+        setCurrentWaypoint(idx - 1)
+    }
+
     fun setCameraTarget(latitude: Double, longitude: Double) {
         lastCameraLat = latitude
         lastCameraLon = longitude
@@ -354,21 +529,145 @@ class MapViewModel @Inject constructor(
         lastBoundsZoom = zoom
         hasBounds = true
         aisRepository.setQueryBounds(minLat, minLng, maxLat, maxLng)
-        if (_uiState.value.showDepth) {
-            fetchDepthFeatures(minLat, minLng, maxLat, maxLng, zoom)
-            fetchEmodnetDepthFeatures(minLat, minLng, maxLat, maxLng, zoom)
+        pruneOutOfViewFeatures(minLat, minLng, maxLat, maxLng)
+        if (boundsChangedSignificantly(minLat, minLng, maxLat, maxLng, zoom)) {
+            prevFetchMinLat = minLat
+            prevFetchMinLng = minLng
+            prevFetchMaxLat = maxLat
+            prevFetchMaxLng = maxLng
+            prevFetchZoom = zoom
+            if (_uiState.value.showDepth) {
+                fetchDepthFeatures(minLat, minLng, maxLat, maxLng, zoom)
+                fetchEmodnetDepthFeatures(minLat, minLng, maxLat, maxLng, zoom)
+            }
+            if (fiState.showVvNavmarks) {
+                fetchTurvalaitteet(minLat, minLng, maxLat, maxLng, zoom)
+            }
+            if (fiState.showTurvalaiteviat) {
+                fetchTurvalaiteviat(minLat, minLng, maxLat, maxLng, zoom)
+            }
         }
-        if (fiState.showVvNavmarks) {
-            fetchTurvalaitteet(minLat, minLng, maxLat, maxLng, zoom)
+    }
+
+    fun setPaneCamera(letter: String, latitude: Double, longitude: Double, zoom: Double) {
+        when (letter) {
+            "a" -> {
+                paneACamLat = latitude; paneACamLon = longitude; paneACamZoom = zoom
+                camAHandler.removeCallbacks(paneACamSaveRunnable)
+                camAHandler.postDelayed(paneACamSaveRunnable, 500L)
+            }
+            "b" -> {
+                paneBCamLat = latitude; paneBCamLon = longitude; paneBCamZoom = zoom
+                camBHandler.removeCallbacks(paneBCamSaveRunnable)
+                camBHandler.postDelayed(paneBCamSaveRunnable, 500L)
+            }
         }
-        if (fiState.showTurvalaiteviat) {
-            fetchTurvalaiteviat(minLat, minLng, maxLat, maxLng, zoom)
+        setCameraTarget(latitude, longitude)
+    }
+
+    fun getPaneInitialCamera(letter: String): Triple<Double, Double, Double> {
+        val lat = when (letter) {
+            "a" -> prefs.getFloat("cam_a_lat", Float.NaN).toDouble()
+            "b" -> prefs.getFloat("cam_b_lat", Float.NaN).toDouble()
+            else -> Double.NaN
+        }
+        val lon = when (letter) {
+            "a" -> prefs.getFloat("cam_a_lon", Float.NaN).toDouble()
+            "b" -> prefs.getFloat("cam_b_lon", Float.NaN).toDouble()
+            else -> Double.NaN
+        }
+        val zoom = when (letter) {
+            "a" -> prefs.getFloat("cam_a_zoom", 7.0f).toDouble()
+            "b" -> prefs.getFloat("cam_b_zoom", 7.0f).toDouble()
+            else -> 7.0
+        }
+        if (lat.isNaN() || lon.isNaN()) {
+            val fallbackLat = prefs.getFloat("cam_lat", app.pursi.DEFAULT_LAT.toFloat()).toDouble()
+            val fallbackLon = prefs.getFloat("cam_lon", app.pursi.DEFAULT_LON.toFloat()).toDouble()
+            val fallbackZoom = prefs.getFloat("cam_zoom", 7.0f).toDouble()
+            return Triple(fallbackLat, fallbackLon, fallbackZoom)
+        }
+        return Triple(lat, lon, zoom)
+    }
+
+    private fun boundsChangedSignificantly(
+        minLat: Double, minLng: Double, maxLat: Double, maxLng: Double, zoom: Double
+    ): Boolean {
+        if (prevFetchMinLat.isNaN()) return true
+        val tol = 0.01
+        val zoomTol = 0.5
+        return kotlin.math.abs(minLat - prevFetchMinLat) > tol ||
+            kotlin.math.abs(minLng - prevFetchMinLng) > tol ||
+            kotlin.math.abs(maxLat - prevFetchMaxLat) > tol ||
+            kotlin.math.abs(maxLng - prevFetchMaxLng) > tol ||
+            kotlin.math.abs(zoom - prevFetchZoom) > zoomTol
+    }
+
+    private fun pruneOutOfViewFeatures(minLat: Double, minLng: Double, maxLat: Double, maxLng: Double) {
+        val viewport = BoundingBox(minLat, maxLat, minLng, maxLng).expanded(1.5)
+        _uiState.update { state ->
+            val prunedDepth = pruneMap(state.depthFeatures, viewport)
+            val fi = state.fiState ?: return@update state
+            val trimmedFi = fi.copy(
+                turvalaiteFeatures = pruneMap(fi.turvalaiteFeatures, viewport),
+                valosektoriFeatures = pruneMap(fi.valosektoriFeatures, viewport),
+                vesiliikennemerkkiFeatures = pruneMap(fi.vesiliikennemerkkiFeatures, viewport),
+                navlineFeatures = pruneMap(fi.navlineFeatures, viewport),
+                fairwayFeatures = pruneMap(fi.fairwayFeatures, viewport),
+                turvalaitevikaFeatures = pruneMap(fi.turvalaitevikaFeatures, viewport),
+            )
+            state.copy(depthFeatures = prunedDepth, fiState = trimmedFi)
+        }
+    }
+
+    private fun pruneMap(
+        features: Map<String, List<app.pursi.data.model.WfsFeature>>,
+        viewport: BoundingBox
+    ): Map<String, List<app.pursi.data.model.WfsFeature>> {
+        if (features.isEmpty()) return features
+        return features.mapValues { (_, list) ->
+            list.filter { wfs ->
+                val featBox = BoundingBox(wfs.minLat, wfs.maxLat, wfs.minLng, wfs.maxLng)
+                featBox.intersects(viewport)
+            }
         }
     }
 
     fun setChartOpacity(opacity: Float) {
         _uiState.update { it.copy(chartOpacity = opacity) }
         savedStateHandle["chartOpacity"] = opacity
+    }
+
+    fun setPaneALayerState(state: PaneLayerState) {
+        _paneALayerState.value = state
+        persistPaneLayerState("a", state)
+    }
+
+    fun setPaneBLayerState(state: PaneLayerState) {
+        _paneBLayerState.value = state
+        persistPaneLayerState("b", state)
+    }
+
+    private fun loadPaneLayerState(letter: String): PaneLayerState {
+        val savedHandleKey = "pane${letter.uppercase()}LayerState"
+        val prefsKey = "pane_${letter}_layer_state"
+        val fromHandle = savedStateHandle.get<String>(savedHandleKey)
+        if (fromHandle != null) {
+            val parsed = PaneLayerState.fromJson(fromHandle)
+            if (parsed != PaneLayerState()) return parsed
+        }
+        val fromPrefs = prefs.getString(prefsKey, null)
+        if (fromPrefs != null) {
+            val parsed = PaneLayerState.fromJson(fromPrefs)
+            return parsed
+        }
+        return PaneLayerState.fromMapUiState(_uiState.value)
+    }
+
+    private fun persistPaneLayerState(letter: String, state: PaneLayerState) {
+        val json = state.toJson()
+        savedStateHandle["pane${letter.uppercase()}LayerState"] = json
+        prefs.edit().putString("pane_${letter}_layer_state", json).apply()
     }
 
     fun toggleShowLightning() = toggleUiFlag("showLightning", { it.showLightning }, { s, v -> s.copy(showLightning = v) })
@@ -725,6 +1024,31 @@ class MapViewModel @Inject constructor(
         savedStateHandle["orientationMode"] = _uiState.value.orientationMode
     }
 
+    fun cyclePaneOrientationMode(letter: String) {
+        val flow = when (letter) {
+            "a" -> _paneALayerState
+            "b" -> _paneBLayerState
+            else -> return
+        }
+        flow.update { state ->
+            state.copy(orientationMode = when (state.orientationMode) {
+                OrientationMode.NORTH_UP -> OrientationMode.COURSE_UP
+                OrientationMode.COURSE_UP -> OrientationMode.NORTH_UP
+            })
+        }
+        persistPaneLayerState(letter, flow.value)
+    }
+
+    fun setPaneOrientationMode(letter: String, mode: OrientationMode) {
+        val flow = when (letter) {
+            "a" -> _paneALayerState
+            "b" -> _paneBLayerState
+            else -> return
+        }
+        flow.update { state -> state.copy(orientationMode = mode) }
+        persistPaneLayerState(letter, flow.value)
+    }
+
     fun setNightMode(mode: NightMode) {
         android.util.Log.d("PursiMap", "setNightMode: $mode")
         _nightMode.value = mode
@@ -747,6 +1071,25 @@ class MapViewModel @Inject constructor(
         SectorMode.OFF -> false
         SectorMode.NIGHT -> isNightMode
         SectorMode.ALWAYS -> true
+    }
+
+    fun toggleSplitMode() {
+        val current = _uiState.value.splitMode
+        _uiState.update { it.copy(splitMode = !current) }
+        persistBoth("splitMode", !current)
+    }
+
+    fun setSplitOrientation(orientation: SplitOrientation) {
+        _uiState.update { it.copy(splitOrientation = orientation) }
+        savedStateHandle["splitOrientation"] = orientation.name
+        prefs.edit().putString("split_orientation", orientation.name).apply()
+    }
+
+    fun setSplitFraction(fraction: Float) {
+        val f = fraction.coerceIn(0f, 1f)
+        _uiState.update { it.copy(splitFraction = f) }
+        savedStateHandle["splitFraction"] = f
+        prefs.edit().putFloat("split_fraction", f).apply()
     }
 
     fun setOrientationMode(mode: OrientationMode) {
@@ -801,7 +1144,8 @@ class MapViewModel @Inject constructor(
 
     fun refreshSeamarksStatus() {
         _uiState.update { it.copy(
-            seamarksDownloaded = java.io.File(context.filesDir, "seamarks.pmtiles").exists(),
+            seamarksDownloaded = java.io.File(context.filesDir, "seamarks.pmtiles").exists()
+                || app.pursi.map.PmtilesDownloader.CONTINENTS.any { java.io.File(context.filesDir, "seamarks_${it.id}.pmtiles").exists() },
             downloadedSeamarkContinents = app.pursi.map.PmtilesDownloader.CONTINENTS
                 .map { c -> c.id }
                 .filter { java.io.File(context.filesDir, "seamarks_$it.pmtiles").exists() }

@@ -26,6 +26,7 @@ object TileSourceBuilder {
                     coverageName = covName,
                     description = desc,
                     category = "chart",
+                    subdir = layer.subdir,
                     coverage = provider.coverage
                 )
             }

@@ -7,7 +7,6 @@ import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
-import android.os.PowerManager
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -39,7 +38,6 @@ class MainActivity : ComponentActivity() {
     @Inject lateinit var analyticsManager: AnalyticsManager
 
     private lateinit var mapPrefs: SharedPreferences
-    private var keepScreenOnWakeLock: PowerManager.WakeLock? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
@@ -69,12 +67,6 @@ class MainActivity : ComponentActivity() {
         super.onStart()
         if (mapPrefs.getBoolean("keep_screen_on", false)) {
             window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-            val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
-            @Suppress("DEPRECATION")
-            keepScreenOnWakeLock = pm.newWakeLock(
-                PowerManager.SCREEN_BRIGHT_WAKE_LOCK or PowerManager.ACQUIRE_CAUSES_WAKEUP,
-                "Pursi:KeepScreenOn"
-            ).apply { acquire() }
         }
         ensureLocationServiceRunning()
         if (::weatherRepository.isInitialized) {
@@ -83,8 +75,6 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onStop() {
-        keepScreenOnWakeLock?.takeIf { it.isHeld }?.release()
-        keepScreenOnWakeLock = null
         window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         if (::weatherRepository.isInitialized) {
             weatherRepository.pause()

@@ -368,4 +368,11 @@
     <string name="wind_meter_size_small">Lille</string>
     <string name="wind_meter_size_medium">Normal</string>
     <string name="wind_meter_size_large">Stor</string>
+    <string name="split_view">Delt visning</string>
+    <string name="warning_group_weather">Vejradvarsler</string>
+    <string name="warning_group_ending">Slutter snart</string>
+    <string name="warning_group_other">Andre advarsler</string>
+    <string name="prev_waypoint">Forrige</string>
+    <string name="next_waypoint">Næste</string>
+    <string name="edit_route">Rediger</string>
 </resources>

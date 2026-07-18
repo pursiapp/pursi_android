@@ -28,7 +28,7 @@ Pursi uses a self-hosted Umami analytics instance to collect anonymous usage sta
 Umami is privacy-focused analytics software. No personal data (IP addresses, unique identifiers, cookies) is collected or stored. You can disable analytics at any time in Settings. When disabled, no data is sent.
 
 ### Crash Reports
-When the app crashes, a stack trace and app version information are sent to the same Umami analytics instance for debugging purposes. No personal data is included. Crash reporting can be disabled together with analytics in Settings.
+When the app crashes, an anonymous crash report (exception type, sanitized stack trace, app version, device model) is sent to the Umami instance for debugging purposes. File paths in stack traces are redacted before transmission. Crash reporting respects the analytics setting — when disabled, no data is sent.
 
 ## Third-Party Services
 
