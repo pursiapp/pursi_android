@@ -15,6 +15,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Navigation
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Undo
@@ -44,6 +45,7 @@ fun RouteActionCard(
     waypoints: List<LatLng>,
     defaultBoat: Boat?,
     isPlanningMode: Boolean,
+    isViewingSavedRoute: Boolean = false,
     label: String? = null,
     showReportButton: Boolean = false,
     onReportObservation: () -> Unit = {},
@@ -51,6 +53,7 @@ fun RouteActionCard(
     onClear: () -> Unit,
     onSave: () -> Unit,
     onClose: () -> Unit,
+    onEdit: () -> Unit = {},
     navigationState: NavigationState = NavigationState(),
     onStartNavigate: () -> Unit = {},
     onStopNavigate: () -> Unit = {},
@@ -153,6 +156,18 @@ fun RouteActionCard(
                     }
                     IconButton(onClick = onSave, modifier = Modifier.size(48.dp)) {
                         Icon(Icons.Default.Save, stringResource(R.string.save_route), modifier = Modifier.size(24.dp), tint = MaterialTheme.colorScheme.primary)
+                    }
+                } else if (isViewingSavedRoute) {
+                    if (waypoints.size >= 1) {
+                        IconButton(onClick = onStartNavigate, modifier = Modifier.size(48.dp)) {
+                            Icon(Icons.Default.Navigation, stringResource(R.string.navigate), modifier = Modifier.size(24.dp), tint = MaterialTheme.colorScheme.primary)
+                        }
+                    }
+                    IconButton(onClick = onEdit, modifier = Modifier.size(48.dp)) {
+                        Icon(Icons.Default.Edit, stringResource(R.string.edit_route), modifier = Modifier.size(24.dp))
+                    }
+                    IconButton(onClick = onClose, modifier = Modifier.size(48.dp)) {
+                        Icon(Icons.Default.Close, stringResource(R.string.close), modifier = Modifier.size(24.dp))
                     }
                 } else {
                     IconButton(onClick = onClose, modifier = Modifier.size(48.dp)) {

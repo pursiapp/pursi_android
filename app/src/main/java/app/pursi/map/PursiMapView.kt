@@ -129,6 +129,7 @@ fun PursiMapView(
     showAlgae: Boolean = false,
     waterObservations: List<WaterObservation> = emptyList(),
     seamarksDownloaded: Boolean = false,
+    downloadedSeamarkContinents: Set<String> = emptySet(),
     showDepth: Boolean = true,
     depthFeatures: Map<String, List<WfsFeature>> = emptyMap(),
     emodnetDepthSamples: List<app.pursi.data.model.EmodnetDepthSample> = emptyList(),
@@ -468,21 +469,24 @@ fun PursiMapView(
     // Track last loaded state to avoid duplicate style loads and server restarts
     var lastStyleUri by remember { mutableStateOf<String?>(null) }
     var lastReloadTrigger by remember { mutableStateOf(0) }
-    var lastServerConfig by remember { mutableStateOf<Boolean?>(null) }
+    var lastServerFileSet by remember { mutableStateOf<Set<String>>(emptySet()) }
     var seamarkLayerIds by remember { mutableStateOf<List<String>>(emptyList()) }
 
-    LaunchedEffect(seamarksDownloaded, currentMap.value, reloadTrigger, isNightMode) {
+    LaunchedEffect(seamarksDownloaded, downloadedSeamarkContinents, currentMap.value, reloadTrigger, isNightMode) {
         val map = currentMap.value ?: return@LaunchedEffect
 
-        if (lastServerConfig == null || seamarksDownloaded != lastServerConfig) {
-            lastServerConfig = seamarksDownloaded
-            val continentFiles = app.pursi.map.PmtilesDownloader.CONTINENTS
-                .map { java.io.File(context.filesDir, "seamarks_${it.id}.pmtiles") }
-                .filter { it.exists() }
-            val legacyFile = java.io.File(context.filesDir, "seamarks.pmtiles")
-            val allLocalFiles = listOfNotNull(
-                legacyFile.takeIf { it.exists() }
-            ) + continentFiles
+        val continentFiles = app.pursi.map.PmtilesDownloader.CONTINENTS
+            .map { java.io.File(context.filesDir, "seamarks_${it.id}.pmtiles") }
+            .filter { it.exists() }
+        val legacyFile = java.io.File(context.filesDir, "seamarks.pmtiles")
+        val allLocalFiles = listOfNotNull(
+            legacyFile.takeIf { it.exists() }
+        ) + continentFiles
+        val currentFileSet = allLocalFiles.map { it.absolutePath }.toSet()
+
+        if (currentFileSet != lastServerFileSet) {
+            lastServerFileSet = currentFileSet
+            TileServerManager.releaseSeamarkServer()
             val pmtilesFiles = allLocalFiles
             val pmtilesUrls = if (allLocalFiles.isEmpty()) {
                 listOf(app.pursi.map.PmtilesDownloader.DEFAULT_SEAMARKS_URL)

@@ -61,33 +61,35 @@ object ChartOverlay {
             }
         }
 
-        val osmBaseId = "fallback-osm-base"
-        val osmSeamarkId = "fallback-osm-seamark"
-        OverlayUtils.safeRemoveLayer(style, osmBaseId)
-        OverlayUtils.safeRemoveSource(style, osmBaseId)
-        val osmTs = TileSet("xyz", "https://tile.openstreetmap.org/{z}/{x}/{y}.png")
-        osmTs.attribution = "© OpenStreetMap contributors"
-        style.addSource(RasterSource(osmBaseId, osmTs, 256))
-        val osmLayer = RasterLayer(osmBaseId, osmBaseId)
-        osmLayer.setProperties(
-            PropertyFactory.rasterResampling("linear"),
-            PropertyFactory.rasterOpacity(chartOpacity)
-        )
-        osmLayer.setMinZoom(2f)
-        style.addLayerBelow(osmLayer, "layer-seamark-bottom")
+        if (!offlineMode) {
+            val osmBaseId = "fallback-osm-base"
+            val osmSeamarkId = "fallback-osm-seamark"
+            OverlayUtils.safeRemoveLayer(style, osmBaseId)
+            OverlayUtils.safeRemoveSource(style, osmBaseId)
+            val osmTs = TileSet("xyz", "https://tile.openstreetmap.org/{z}/{x}/{y}.png")
+            osmTs.attribution = "© OpenStreetMap contributors"
+            style.addSource(RasterSource(osmBaseId, osmTs, 256))
+            val osmLayer = RasterLayer(osmBaseId, osmBaseId)
+            osmLayer.setProperties(
+                PropertyFactory.rasterResampling("linear"),
+                PropertyFactory.rasterOpacity(chartOpacity)
+            )
+            osmLayer.setMinZoom(2f)
+            style.addLayerBelow(osmLayer, "layer-seamark-bottom")
 
-        OverlayUtils.safeRemoveLayer(style, osmSeamarkId)
-        OverlayUtils.safeRemoveSource(style, osmSeamarkId)
-        val osmSeaTs = TileSet("xyz", "https://tiles.openseamap.org/seamark/{z}/{x}/{y}.png")
-        osmSeaTs.attribution = "© OpenSeaMap contributors"
-        style.addSource(RasterSource(osmSeamarkId, osmSeaTs, 256))
-        val osmSeaLayer = RasterLayer(osmSeamarkId, osmSeamarkId)
-        osmSeaLayer.setProperties(
-            PropertyFactory.rasterResampling("nearest"),
-            PropertyFactory.rasterOpacity(chartOpacity)
-        )
-        osmSeaLayer.setMinZoom(4f)
-        style.addLayerBelow(osmSeaLayer, "layer-seamark-bottom")
+            OverlayUtils.safeRemoveLayer(style, osmSeamarkId)
+            OverlayUtils.safeRemoveSource(style, osmSeamarkId)
+            val osmSeaTs = TileSet("xyz", "https://tiles.openseamap.org/seamark/{z}/{x}/{y}.png")
+            osmSeaTs.attribution = "© OpenSeaMap contributors"
+            style.addSource(RasterSource(osmSeamarkId, osmSeaTs, 256))
+            val osmSeaLayer = RasterLayer(osmSeamarkId, osmSeamarkId)
+            osmSeaLayer.setProperties(
+                PropertyFactory.rasterResampling("nearest"),
+                PropertyFactory.rasterOpacity(chartOpacity)
+            )
+            osmSeaLayer.setMinZoom(4f)
+            style.addLayerBelow(osmSeaLayer, "layer-seamark-bottom")
+        }
 
         val chartRefLayer = "layer-seamark-bottom"
         for (provider in chartProviders) {
@@ -108,8 +110,8 @@ object ChartOverlay {
                 for (l in provider.layers) {
                     val url = when {
                         tilesDirPath == null -> l.tileUrl
-                        java.io.File(tilesDirPath, "${l.subdir}").exists() ->
-                            "file://$tilesDirPath/${l.subdir}/{z}/{y}/{x}.png"
+                        java.io.File(tilesDirPath, "${provider.providerId}/${l.subdir}").exists() ->
+                            "file://$tilesDirPath/${provider.providerId}/${l.subdir}/{z}/{y}/{x}.png"
                         java.io.File(tilesDirPath, provider.providerId).exists() ->
                             "file://$tilesDirPath/${provider.providerId}/{z}/{y}/{x}.png"
                         else -> l.tileUrl
@@ -135,17 +137,6 @@ object ChartOverlay {
                     }
                 }
             }
-        }
-
-        // When a local chart provider is active (e.g. Traficom in Finland,
-        // Kartverket in Norway), hide the global OpenSeaMap seamark raster.
-        // It was added as a fallback earlier, but now that we know a local
-        // chart covers this area we should not show both — they visually
-        // double-up at mid-opacity slider positions.
-        if (chartProviders.isNotEmpty()) {
-            style.getLayer(osmSeamarkId)?.setProperties(
-                PropertyFactory.rasterOpacity(0f)
-            )
         }
     }
 

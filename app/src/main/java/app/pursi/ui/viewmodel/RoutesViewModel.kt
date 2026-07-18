@@ -176,13 +176,11 @@ class RoutesViewModel @Inject constructor(
                 )
             }
             if (waypoints.isNotEmpty()) {
-                val savedRoute = SavedRoute(
-                    name = name, sourceTrackId = trackId, waypointCount = waypoints.size,
-                    totalDistanceNm = distanceNm, boatId = boatId
+                savedRouteDao.insertWithWaypoints(
+                    SavedRoute(name = name, sourceTrackId = trackId, waypointCount = waypoints.size,
+                        totalDistanceNm = distanceNm, boatId = boatId),
+                    waypoints
                 )
-                savedRouteDao.insert(savedRoute)
-                val wps = waypoints.map { it.copy(routeId = savedRoute.id) }
-                savedRouteDao.insertWaypoints(wps)
             }
         }
     }

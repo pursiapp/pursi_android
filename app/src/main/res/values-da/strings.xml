@@ -374,4 +374,5 @@
     <string name="warning_group_other">Andre advarsler</string>
     <string name="prev_waypoint">Forrige</string>
     <string name="next_waypoint">Næste</string>
+    <string name="edit_route">Rediger</string>
 </resources>

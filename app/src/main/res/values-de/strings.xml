@@ -374,4 +374,5 @@
     <string name="warning_group_other">Andere Warnungen</string>
     <string name="prev_waypoint">Vorheriger</string>
     <string name="next_waypoint">Nächster</string>
+    <string name="edit_route">Bearbeiten</string>
 </resources>

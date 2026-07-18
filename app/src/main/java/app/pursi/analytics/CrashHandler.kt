@@ -13,6 +13,7 @@ class CrashHandler(
     private val umamiUrl: String,
     private val websiteId: String,
     private val versionName: String,
+    private val enabled: () -> Boolean,
     private val defaultHandler: Thread.UncaughtExceptionHandler?,
 ) : Thread.UncaughtExceptionHandler {
 
@@ -31,11 +32,13 @@ class CrashHandler(
     }
 
     private fun sendCrashSync(e: Throwable) {
+        if (!enabled()) return
         val stack = e.stackTraceToString()
-        val truncated = if (stack.length > MAX_STACK_LENGTH) {
-            stack.substring(0, MAX_STACK_LENGTH)
+        val sanitized = sanitizeStack(stack)
+        val truncated = if (sanitized.length > MAX_STACK_LENGTH) {
+            sanitized.substring(0, MAX_STACK_LENGTH)
         } else {
-            stack
+            sanitized
         }
 
         val data = mapOf(
@@ -83,6 +86,11 @@ class CrashHandler(
         } finally {
             conn.disconnect()
         }
+    }
+
+    private fun sanitizeStack(stack: String): String {
+        return stack
+            .replace(Regex("""/(?:data|storage|Users|home)[^)]+"""), "/REDACTED")
     }
 
     companion object {

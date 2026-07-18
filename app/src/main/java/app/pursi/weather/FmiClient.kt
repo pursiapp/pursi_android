@@ -14,6 +14,7 @@ import android.util.Log
 import java.io.IOException
 import java.io.StringReader
 import java.net.URLEncoder
+import java.time.Instant
 import java.util.Locale
 import javax.inject.Inject
 
@@ -604,13 +605,20 @@ class FmiClient @Inject constructor(
                 if (count > 0) { centroidLat = sumLat / count; centroidLon = sumLon / count }
             }
 
+            val validityStartEpochMs = onset.takeIf { it.isNotBlank() }
+                ?.let { runCatching { Instant.parse(it).toEpochMilli() }.getOrNull() }
+            val validityEndEpochMs = expires.takeIf { it.isNotBlank() }
+                ?.let { runCatching { Instant.parse(it).toEpochMilli() }.getOrNull() }
+
             MarineWarning(
                 event = event, eventCode = eventCode, severity = severity,
                 color = color, description = description, headline = headline,
                 areaDesc = areaDesc, onset = onset, expires = expires,
                 windSpeedMs = windSpeed, windDirectionDeg = windDir,
                 centroidLat = centroidLat, centroidLon = centroidLon,
-                polygonCoords = polygonCoords
+                polygonCoords = polygonCoords,
+                validityStartEpochMs = validityStartEpochMs,
+                validityEndEpochMs = validityEndEpochMs
             )
         } catch (_: Exception) { null }
     }

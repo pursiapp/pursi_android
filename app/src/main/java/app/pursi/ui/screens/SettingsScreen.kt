@@ -982,16 +982,6 @@ fun SettingsScreen(
                     description = "Merimerkit (poijut, viitat, majakat)",
                     category = "seamarks",
                     coverage = app.pursi.datasource.core.BoundingBox.WORLD
-                ),
-                TileSource(
-                    providerId = "openfreemap", displayName = "OpenFreeMap",
-                    urlTemplate = "https://tiles.openfreemap.org/planet/{z}/{x}/{y}.pbf",
-                    extension = "pbf", minZoom = 0, maxZoom = 14,
-                    avgTileBytes = 5_000L,
-                    coverageName = "Maailmanlaajuinen",
-                    description = "Vektoripohjakartta (maasto, tiet, nimistö)",
-                    category = "base",
-                    coverage = app.pursi.datasource.core.BoundingBox.WORLD
                 )
             )
         )

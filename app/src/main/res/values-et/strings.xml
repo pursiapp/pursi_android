@@ -374,4 +374,5 @@
     <string name="warning_group_other">Muud hoiatused</string>
     <string name="prev_waypoint">Eelmine</string>
     <string name="next_waypoint">Järgmine</string>
+    <string name="edit_route">Muuda</string>
 </resources>

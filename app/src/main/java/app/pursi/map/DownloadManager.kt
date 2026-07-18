@@ -94,7 +94,8 @@ class DownloadManager(
                     providerId = source.providerId,
                     urlTemplate = source.urlTemplate,
                     extension = source.extension,
-                    tiles = tiles
+                    tiles = tiles,
+                    subdir = source.subdir
                 ) { done, _ ->
                     completed += done
                     val total = tileCount * sources.size

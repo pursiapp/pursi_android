@@ -80,10 +80,10 @@ private fun uvLabelRes(uv: Float): Int = when {
 @Composable
 fun WeatherScreen(
     modifier: Modifier = Modifier,
+    mapViewModel: MapViewModel,
     onAlgaeClick: (Double, Double) -> Unit = { _, _ -> }
 ) {
     val weatherViewModel: WeatherViewModel = hiltViewModel()
-    val mapViewModel: MapViewModel = hiltViewModel()
 
     LaunchedEffect(Unit) {
         weatherViewModel.algaeTarget.collect { target ->
@@ -95,20 +95,18 @@ fun WeatherScreen(
         }
     }
 
-    LaunchedEffect(Unit) {
-        val tab = mapViewModel.consumeRequestedWeatherTab()
-        if (tab >= 0) {
-            weatherViewModel.setSelectedTab(tab)
-        }
-    }
-
-    WeatherContent(weatherViewModel = weatherViewModel, modifier = modifier)
+    WeatherContent(
+        weatherViewModel = weatherViewModel,
+        mapViewModel = mapViewModel,
+        modifier = modifier
+    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun WeatherContent(
     weatherViewModel: WeatherViewModel,
+    mapViewModel: MapViewModel,
     modifier: Modifier = Modifier
 ) {
     val location by weatherViewModel.currentLocation.collectAsStateWithLifecycle()
@@ -124,6 +122,14 @@ fun WeatherContent(
     val faves by weatherViewModel.faves.collectAsStateWithLifecycle()
     val algaeObs by weatherViewModel.algaeObservations.collectAsStateWithLifecycle()
     val tempObs by weatherViewModel.tempObservations.collectAsStateWithLifecycle()
+
+    val requestedTab by mapViewModel.requestedWeatherTab.collectAsStateWithLifecycle()
+    LaunchedEffect(requestedTab) {
+        if (requestedTab >= 0) {
+            weatherViewModel.setSelectedTab(requestedTab)
+            mapViewModel.consumeRequestedWeatherTab()
+        }
+    }
 
     val tabs = listOf(
         stringResource(R.string.conditions_tab),

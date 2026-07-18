@@ -102,3 +102,12 @@ data class WeatherCapabilities(
     val hasLightning: Boolean = false,
     val hasWaterLevel: Boolean = false
 )
+
+fun MarineWarning.isRelevantWithin24h(
+    nowMs: Long = System.currentTimeMillis()
+): Boolean {
+    val horizon = nowMs + 24L * 60 * 60 * 1000
+    val notExpired = validityEndEpochMs == null || validityEndEpochMs >= nowMs
+    val startsInTime = validityStartEpochMs == null || validityStartEpochMs <= horizon
+    return notExpired && startsInTime
+}

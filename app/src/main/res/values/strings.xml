@@ -386,4 +386,5 @@
     <string name="stop_navigation">Stop</string>
     <string name="prev_waypoint">Previous</string>
     <string name="next_waypoint">Next</string>
+    <string name="edit_route">Edit</string>
 </resources>

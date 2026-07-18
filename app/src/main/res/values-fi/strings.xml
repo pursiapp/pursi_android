@@ -383,4 +383,5 @@
     <string name="warning_group_other">Muut varoitukset</string>
     <string name="prev_waypoint">Edellinen</string>
     <string name="next_waypoint">Seuraava</string>
+    <string name="edit_route">Muokkaa</string>
 </resources>

@@ -312,7 +312,8 @@ class MapViewModel @Inject constructor(
                     ?: SplitOrientation.Vertical.name
             ) } catch (_: Exception) { SplitOrientation.Vertical },
             splitFraction = savedStateHandle.get<Float>("splitFraction") ?: prefs.getFloat("split_fraction", 0.5f),
-            seamarksDownloaded = java.io.File(context.filesDir, "seamarks.pmtiles").exists(),
+            seamarksDownloaded = java.io.File(context.filesDir, "seamarks.pmtiles").exists()
+                || app.pursi.map.PmtilesDownloader.CONTINENTS.any { java.io.File(context.filesDir, "seamarks_${it.id}.pmtiles").exists() },
             downloadedSeamarkContinents = app.pursi.map.PmtilesDownloader.CONTINENTS
                 .map { it.id }
                 .filter { java.io.File(context.filesDir, "seamarks_$it.pmtiles").exists() }
@@ -1143,7 +1144,8 @@ class MapViewModel @Inject constructor(
 
     fun refreshSeamarksStatus() {
         _uiState.update { it.copy(
-            seamarksDownloaded = java.io.File(context.filesDir, "seamarks.pmtiles").exists(),
+            seamarksDownloaded = java.io.File(context.filesDir, "seamarks.pmtiles").exists()
+                || app.pursi.map.PmtilesDownloader.CONTINENTS.any { java.io.File(context.filesDir, "seamarks_${it.id}.pmtiles").exists() },
             downloadedSeamarkContinents = app.pursi.map.PmtilesDownloader.CONTINENTS
                 .map { c -> c.id }
                 .filter { java.io.File(context.filesDir, "seamarks_$it.pmtiles").exists() }

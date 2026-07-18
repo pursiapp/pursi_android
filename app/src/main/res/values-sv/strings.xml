@@ -382,4 +382,5 @@
     <string name="warning_group_other">Andra varningar</string>
     <string name="prev_waypoint">Föregående</string>
     <string name="next_waypoint">Nästa</string>
+    <string name="edit_route">Redigera</string>
 </resources>

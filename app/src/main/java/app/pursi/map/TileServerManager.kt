@@ -18,7 +18,6 @@ object TileServerManager {
         context: Context,
     ): SeamarkTileServer {
         seamarkRefCount++
-        if (seamarkServer?.isRunning == true) return seamarkServer!!
         seamarkServer?.stopServer()
         val server = SeamarkTileServer(
             pmtilesFiles = pmtilesFiles,

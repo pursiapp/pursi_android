@@ -35,8 +35,8 @@ android {
         applicationId = "app.pursi"
         minSdk = 24
         targetSdk = 35
-        versionCode = 7
-        versionName = "0.6.2"
+        versionCode = 8
+        versionName = "0.6.3"
 
         val buildTimestamp = SimpleDateFormat(
             "yyyy-MM-dd HH:mm:ss z", Locale.US

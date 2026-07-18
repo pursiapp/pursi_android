@@ -21,6 +21,7 @@ class PursiApplication : Application() {
     override fun onCreate() {
         super.onCreate()
 
+        val analyticsPrefs = getSharedPreferences("pursi_analytics", MODE_PRIVATE)
         Thread.setDefaultUncaughtExceptionHandler(
             CrashHandler(
                 umamiUrl = BuildConfig.UMAMI_URL,
@@ -28,6 +29,7 @@ class PursiApplication : Application() {
                 versionName = try {
                     packageManager.getPackageInfo(packageName, 0).versionName ?: "unknown"
                 } catch (_: Exception) { "unknown" },
+                enabled = { analyticsPrefs.getBoolean("analytics_enabled", true) },
                 defaultHandler = Thread.getDefaultUncaughtExceptionHandler(),
             ),
         )

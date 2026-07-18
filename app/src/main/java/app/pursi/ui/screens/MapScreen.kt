@@ -48,6 +48,7 @@ import app.pursi.ui.components.RestoreStrip
 import app.pursi.ui.components.SplitterHandle
 import app.pursi.weather.WeatherUnitPrefs
 import app.pursi.weather.currentForecastPoint
+import app.pursi.weather.isRelevantWithin24h
 import app.pursi.data.model.TrackSummary
 import app.pursi.location.BearingSmoother
 import app.pursi.location.SpeedSmoother
@@ -423,9 +424,13 @@ fun MapScreen(
 
     val loc = location
     val relevantWarnings = if (loc != null) {
-        warnings.filter { it.polygonCoords.isEmpty() || app.pursi.weather.pointInPolygon(loc.latitude, loc.longitude, it.polygonCoords) }
+        warnings.filter {
+            (it.polygonCoords.isEmpty() ||
+                app.pursi.weather.pointInPolygon(loc.latitude, loc.longitude, it.polygonCoords)) &&
+            it.isRelevantWithin24h()
+        }
     } else {
-        warnings.filter { it.polygonCoords.isEmpty() }
+        warnings.filter { it.polygonCoords.isEmpty() && it.isRelevantWithin24h() }
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -510,6 +515,7 @@ fun MapScreen(
                 showAis = paneState.paneLayerState.showAis,
                 vessels = vessels,
                 seamarksDownloaded = uiState.seamarksDownloaded,
+                downloadedSeamarkContinents = uiState.downloadedSeamarkContinents,
                 showAlgae = paneState.paneLayerState.showAlgae,
                 waterObservations = uiState.waterObservations,
                 showDepth = paneState.paneLayerState.showDepth,
@@ -1152,6 +1158,7 @@ fun MapScreen(
                 waypoints = activeWps,
                 defaultBoat = defaultBoat,
                 isPlanningMode = routeWaypoints.isNotEmpty(),
+                isViewingSavedRoute = viewingRouteWaypoints.isNotEmpty() && !navState.isActive,
                 label = cardLabel,
                 showReportButton = showReportButton,
                 onReportObservation = {
@@ -1163,6 +1170,13 @@ fun MapScreen(
                 onSave = {
                     routeName = "Route ${SimpleDateFormat("d.M.yyyy", Locale.getDefault()).format(Date())}"
                     showRouteSaveDialog = true
+                },
+                onEdit = {
+                    routeWaypoints = viewingRouteWaypoints.toList()
+                    viewingRouteWaypoints = emptyList()
+                    mapViewModel.setViewingRouteId(null)
+                    routeCardDragX = 0f
+                    routeCardDragY = 0f
                 },
                 onClose = {
                     when {
@@ -1178,7 +1192,8 @@ fun MapScreen(
                 },
                 navigationState = navState,
                 onStartNavigate = {
-                    mapViewModel.startNavigation(routeWaypoints)
+                    val wps = if (routeWaypoints.isNotEmpty()) routeWaypoints else viewingRouteWaypoints
+                    mapViewModel.startNavigation(wps)
                 },
                 onStopNavigate = {
                     mapViewModel.stopNavigation()
@@ -1219,26 +1234,25 @@ fun MapScreen(
                 scope.launch {
                     try {
                         val routeId = UUID.randomUUID().toString()
-                        mapViewModel.savedRouteDao.insert(SavedRoute(
-                            id = routeId, name = routeName, waypointCount = routeWaypoints.size,
-                            totalDistanceNm = {
-                                var d = 0.0
-                                for (i in 0 until routeWaypoints.size - 1)
-                                    d += app.pursi.location.SpeedCalculator.distanceNm(
-                                        routeWaypoints[i].latitude, routeWaypoints[i].longitude,
-                                        routeWaypoints[i + 1].latitude, routeWaypoints[i + 1].longitude
-                                    )
-                                d
-                            }(),
-                            boatId = defaultBoat?.id
-                        ))
-                        routeWaypoints.forEachIndexed { i, p ->
-                            mapViewModel.savedRouteDao.insertWaypoint(RouteWaypoint(
-                                routeId = routeId, name = "WP ${i + 1}",
-                                latitude = p.latitude, longitude = p.longitude, order = i
-                            ))
+                        val waypoints = routeWaypoints.mapIndexed { i, p ->
+                            RouteWaypoint(routeId = "", name = "WP ${i + 1}", latitude = p.latitude, longitude = p.longitude, order = i)
                         }
+                        val totalNm = if (routeWaypoints.size >= 2) {
+                            var d = 0.0
+                            for (i in 0 until routeWaypoints.size - 1)
+                                d += app.pursi.location.SpeedCalculator.distanceNm(
+                                    routeWaypoints[i].latitude, routeWaypoints[i].longitude,
+                                    routeWaypoints[i + 1].latitude, routeWaypoints[i + 1].longitude
+                                )
+                            d
+                        } else 0.0
+                        mapViewModel.savedRouteDao.insertWithWaypoints(
+                            SavedRoute(id = routeId, name = routeName, waypointCount = routeWaypoints.size,
+                                totalDistanceNm = totalNm, boatId = defaultBoat?.id),
+                            waypoints
+                        )
                         routeWaypoints = emptyList()
+                        mapViewModel.setViewingRouteId(routeId)
                     } catch (_: Exception) {
                         scope.showUserError(context, snackbarHostState, app.pursi.R.string.save_route_failed)
                     }

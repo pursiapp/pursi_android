@@ -11,12 +11,13 @@ class TileStorage(private val context: Context) {
     val storagePath: String
         get() = storageDir.absolutePath
 
-    fun hasTile(providerId: String, z: Int, x: Int, y: Int, ext: String): Boolean {
-        return tileFile(providerId, z, x, y, ext).exists()
+    fun hasTile(providerId: String, z: Int, x: Int, y: Int, ext: String, subdir: String? = null): Boolean {
+        return tileFile(providerId, subdir, z, x, y, ext).exists()
+            || (subdir != null && tileFile(providerId, null, z, x, y, ext).exists())
     }
 
-    fun saveTile(providerId: String, z: Int, x: Int, y: Int, ext: String, data: ByteArray) {
-        val file = tileFile(providerId, z, x, y, ext)
+    fun saveTile(providerId: String, z: Int, x: Int, y: Int, ext: String, data: ByteArray, subdir: String? = null) {
+        val file = tileFile(providerId, subdir, z, x, y, ext)
         file.parentFile?.mkdirs()
         val tmp = File(file.parentFile, "${file.name}.tmp")
         tmp.writeBytes(data)
@@ -52,8 +53,9 @@ class TileStorage(private val context: Context) {
 
     fun totalCacheSizeFormatted(): String = formatBytes(totalCacheSizeBytes())
 
-    private fun tileFile(providerId: String, z: Int, x: Int, y: Int, ext: String): File {
-        return File(storageDir, "$providerId/$z/$y/$x.$ext")
+    private fun tileFile(providerId: String, subdir: String?, z: Int, x: Int, y: Int, ext: String): File {
+        val base = if (subdir != null) "$providerId/$subdir" else providerId
+        return File(storageDir, "$base/$z/$y/$x.$ext")
     }
 
     fun tileFile(path: String): File = File(storageDir, path)
