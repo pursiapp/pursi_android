@@ -1,16 +1,19 @@
 package app.pursi.data.wfs
 
+import android.util.JsonReader
+import android.util.JsonToken
+import android.util.Log
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import android.util.Log
+import java.io.InputStream
+import java.io.InputStreamReader
 import java.net.URLEncoder
 import javax.inject.Inject
 
@@ -41,14 +44,10 @@ class WfsClient @Inject constructor(
         try {
             val request = Request.Builder().url(tileUrl).build()
             client.newCall(request).execute().use { response ->
-                val body = response.body?.string() ?: return@use emptyList()
-                parseGeoJson(body).features
+                val body = response.body ?: return@use emptyList()
+                parseResult(body.byteStream()).features
             }
         } catch (e: CancellationException) { throw e } catch (_: Exception) { emptyList() }
-    }
-
-    companion object {
-        private const val TAG = "Pursi.WFS"
     }
 
     suspend fun query(
@@ -69,90 +68,197 @@ class WfsClient @Inject constructor(
                     Log.e(TAG, "WFS error ${response.code} for $typeName")
                     return@use WfsClientResult(emptyList(), false)
                 }
-                val body = response.body?.string() ?: return@use WfsClientResult(emptyList(), false)
-                val result = parseGeoJson(body)
+                val body = response.body ?: return@use WfsClientResult(emptyList(), false)
+                val result = parseResult(body.byteStream())
                 Log.d(TAG, "Result: ${result.features.size} features for $typeName${if (result.truncated) " (TRUNCATED!)" else ""}")
                 result
             }
         } catch (e: CancellationException) { throw e } catch (_: Exception) { WfsClientResult(emptyList(), false) }
     }
 
-    private fun buildUrl(
-        baseUrl: String, typeName: String,
-        minLat: Double, minLng: Double,
-        maxLat: Double, maxLng: Double,
-        maxFeatures: Int,
-        extraParams: Map<String, String> = emptyMap(),
-        bboxSrs4326: Boolean = true
-    ): String {
-        val bbox = if (bboxSrs4326) {
-            "$minLng,$minLat,$maxLng,$maxLat,EPSG:4326"
-        } else {
-            val (sw, ne) = EtrsTm35finConverter.bboxToEtrsTm35fin(minLat, minLng, maxLat, maxLng)
-            val bboxStr = "${sw.first},${sw.second},${ne.first},${ne.second},EPSG:3067"
-            Log.d(TAG, "EPSG:4326 bbox ${minLng},${minLat},${maxLng},${maxLat} -> EPSG:3067 $bboxStr")
-            bboxStr
-        }
-        val separator = if (baseUrl.contains("?")) "&" else "?"
-        val allParams = mutableMapOf(
-            "service" to "WFS",
-            "version" to "2.0.0",
-            "request" to "GetFeature",
-            "typenames" to typeName,
-            "bbox" to bbox,
-            "srsName" to "EPSG:4326",
-            "outputFormat" to "application/json",
-        )
-        if (maxFeatures > 0) allParams["count"] = maxFeatures.toString()
-        allParams.putAll(extraParams)
-        val queryString = allParams.entries.joinToString("&") { (k, v) ->
-            "${URLEncoder.encode(k, "UTF-8")}=${URLEncoder.encode(v, "UTF-8")}"
-        }
-        return "$baseUrl$separator$queryString"
+    companion object {
+        private const val TAG = "Pursi.WFS"
+        private const val MAX_GEOMETRY_BYTES = 500_000
     }
 
-    private fun parseGeoJson(jsonStr: String): WfsClientResult {
-        val root = try {
-            json.parseToJsonElement(jsonStr).jsonObject
-        } catch (_: Exception) { return WfsClientResult(emptyList(), false) }
-        val features = root["features"]?.jsonArray ?: return WfsClientResult(emptyList(), false)
+    internal fun parseResult(stream: InputStream): WfsClientResult {
+        val reader = JsonReader(InputStreamReader(stream, "UTF-8"))
+        val features = mutableListOf<WfsFeatureData>()
+        var numberReturned: Int? = null
+        var numberMatched: Int? = null
 
-        val numberReturned = try {
-            root["numberReturned"]?.jsonPrimitive?.content?.toIntOrNull()
-        } catch (_: Exception) { null }
-        val numberMatched = try {
-            root["numberMatched"]?.jsonPrimitive?.content?.toIntOrNull()
-        } catch (_: Exception) { null }
-        val truncated = numberMatched != null && numberReturned != null && numberReturned < numberMatched
-
-        val result = mutableListOf<WfsFeatureData>()
-        for (feature in features) {
-            try {
-                val obj = feature.jsonObject
-                val id = obj["id"]?.jsonPrimitive?.content ?: ""
-                val geometry = obj["geometry"]?.toString() ?: continue
-                val props = obj["properties"]?.jsonObject
-                val properties = mutableMapOf<String, String>()
-                props?.forEach { (k, v) ->
-                    try { properties[k] = v.jsonPrimitive.content } catch (_: Exception) { }
+        try {
+            reader.beginObject()
+            while (reader.hasNext()) {
+                when (reader.nextName()) {
+                    "numberReturned" -> numberReturned = reader.nextInt()
+                    "numberMatched" -> numberMatched = reader.nextInt()
+                    "features" -> {
+                        reader.beginArray()
+                        while (reader.hasNext()) {
+                            try {
+                                readGeoJsonFeature(reader)?.let { features.add(it) }
+                            } catch (e: Exception) {
+                                Log.w(TAG, "Failed to parse feature: ${e.message}")
+                                skipNestedValue(reader)
+                            }
+                        }
+                        reader.endArray()
+                    }
+                    else -> reader.skipValue()
                 }
-                val coords = extractBbox(geometry) ?: continue
-                result.add(WfsFeatureData(
-                    id = id, geometry = geometry, properties = properties,
-                    latitude = coords.lat, longitude = coords.lng,
-                    minLat = coords.minLat, minLng = coords.minLng,
-                    maxLat = coords.maxLat, maxLng = coords.maxLng
-                ))
-            } catch (_: Exception) { }
+            }
+            reader.endObject()
+        } catch (e: Exception) {
+            Log.w(TAG, "Stream parsing error (partial result: ${features.size}): ${e.message}")
         }
-        return WfsClientResult(result, truncated)
+
+        val truncated = numberMatched != null && numberReturned != null && numberReturned < numberMatched
+        return WfsClientResult(features, truncated)
     }
 
-    private data class Bbox(
-        val lat: Double, val lng: Double,
-        val minLat: Double, val minLng: Double,
-        val maxLat: Double, val maxLng: Double
-    )
+    private fun readGeoJsonFeature(reader: JsonReader): WfsFeatureData? {
+        var id = ""
+        var geometryStr: String? = null
+        val props = mutableMapOf<String, String>()
+
+        reader.beginObject()
+        while (reader.hasNext()) {
+            when (reader.nextName()) {
+                "id" -> id = reader.nextString()
+                "geometry" -> geometryStr = readNestedJsonValue(reader)
+                "properties" -> readPropertiesToMap(reader, props)
+                else -> reader.skipValue()
+            }
+        }
+        reader.endObject()
+
+        if (geometryStr == null) return null
+
+        if (geometryStr.length > MAX_GEOMETRY_BYTES) {
+            Log.w(TAG, "Skipping feature $id: geometry ${geometryStr.length} bytes exceeds $MAX_GEOMETRY_BYTES")
+            return null
+        }
+
+        val coords = extractBbox(geometryStr) ?: return null
+        return WfsFeatureData(
+            id = id,
+            geometry = geometryStr,
+            properties = props,
+            latitude = coords.lat,
+            longitude = coords.lng,
+            minLat = coords.minLat,
+            minLng = coords.minLng,
+            maxLat = coords.maxLat,
+            maxLng = coords.maxLng
+        )
+    }
+
+    private fun readPropertiesToMap(reader: JsonReader, map: MutableMap<String, String>) {
+        if (reader.peek() == JsonToken.NULL) {
+            reader.nextNull()
+            return
+        }
+        reader.beginObject()
+        while (reader.hasNext()) {
+            val key = reader.nextName()
+            val value = when (reader.peek()) {
+                JsonToken.STRING -> reader.nextString()
+                JsonToken.NUMBER -> reader.nextString()
+                JsonToken.BOOLEAN -> reader.nextBoolean().toString()
+                JsonToken.NULL -> { reader.nextNull(); null }
+                else -> { reader.skipValue(); null }
+            }
+            if (value != null && value != "null" && value.isNotBlank()) {
+                map[key] = value
+            }
+        }
+        reader.endObject()
+    }
+
+    private fun readNestedJsonValue(reader: JsonReader): String? {
+        val sb = StringBuilder()
+        if (!appendJsonValue(reader, sb)) return null
+        return sb.toString()
+    }
+
+    private fun appendJsonValue(reader: JsonReader, sb: StringBuilder): Boolean {
+        return when (reader.peek()) {
+            JsonToken.BEGIN_OBJECT -> {
+                reader.beginObject()
+                sb.append('{')
+                var first = true
+                while (reader.hasNext()) {
+                    if (!first) sb.append(',')
+                    first = false
+                    sb.append('"').append(reader.nextName()).append('"').append(':')
+                    appendJsonValue(reader, sb)
+                }
+                reader.endObject()
+                sb.append('}')
+                true
+            }
+            JsonToken.BEGIN_ARRAY -> {
+                reader.beginArray()
+                sb.append('[')
+                var first = true
+                while (reader.hasNext()) {
+                    if (!first) sb.append(',')
+                    first = false
+                    appendJsonValue(reader, sb)
+                }
+                reader.endArray()
+                sb.append(']')
+                true
+            }
+            JsonToken.STRING -> {
+                val s = reader.nextString()
+                sb.append('"').append(jsonEscape(s)).append('"')
+                true
+            }
+            JsonToken.NUMBER -> {
+                sb.append(reader.nextString())
+                true
+            }
+            JsonToken.BOOLEAN -> {
+                sb.append(reader.nextBoolean().toString())
+                true
+            }
+            JsonToken.NULL -> {
+                reader.nextNull()
+                sb.append("null")
+                true
+            }
+            else -> {
+                reader.skipValue()
+                false
+            }
+        }
+    }
+
+    private fun jsonEscape(s: String): String {
+        return s.replace("\\", "\\\\")
+            .replace("\"", "\\\"")
+            .replace("\n", "\\n")
+            .replace("\r", "\\r")
+            .replace("\t", "\\t")
+    }
+
+    private fun skipNestedValue(reader: JsonReader) {
+        when (reader.peek()) {
+            JsonToken.BEGIN_OBJECT -> {
+                reader.beginObject()
+                while (reader.hasNext()) { reader.skipValue() }
+                reader.endObject()
+            }
+            JsonToken.BEGIN_ARRAY -> {
+                reader.beginArray()
+                while (reader.hasNext()) { skipNestedValue(reader) }
+                reader.endArray()
+            }
+            else -> reader.skipValue()
+        }
+    }
 
     private fun extractBbox(geometry: String): Bbox? {
         return try {
@@ -192,5 +298,45 @@ class WfsClient @Inject constructor(
                 else -> null
             }
         } catch (_: Exception) { null }
+    }
+
+    private data class Bbox(
+        val lat: Double, val lng: Double,
+        val minLat: Double, val minLng: Double,
+        val maxLat: Double, val maxLng: Double
+    )
+
+    private fun buildUrl(
+        baseUrl: String, typeName: String,
+        minLat: Double, minLng: Double,
+        maxLat: Double, maxLng: Double,
+        maxFeatures: Int,
+        extraParams: Map<String, String> = emptyMap(),
+        bboxSrs4326: Boolean = true
+    ): String {
+        val bbox = if (bboxSrs4326) {
+            "$minLng,$minLat,$maxLng,$maxLat,EPSG:4326"
+        } else {
+            val (sw, ne) = EtrsTm35finConverter.bboxToEtrsTm35fin(minLat, minLng, maxLat, maxLng)
+            val bboxStr = "${sw.first},${sw.second},${ne.first},${ne.second},EPSG:3067"
+            Log.d(TAG, "EPSG:4326 bbox ${minLng},${minLat},${maxLng},${maxLat} -> EPSG:3067 $bboxStr")
+            bboxStr
+        }
+        val separator = if (baseUrl.contains("?")) "&" else "?"
+        val allParams = mutableMapOf(
+            "service" to "WFS",
+            "version" to "2.0.0",
+            "request" to "GetFeature",
+            "typenames" to typeName,
+            "bbox" to bbox,
+            "srsName" to "EPSG:4326",
+            "outputFormat" to "application/json",
+        )
+        if (maxFeatures > 0) allParams["count"] = maxFeatures.toString()
+        allParams.putAll(extraParams)
+        val queryString = allParams.entries.joinToString("&") { (k, v) ->
+            "${URLEncoder.encode(k, "UTF-8")}=${URLEncoder.encode(v, "UTF-8")}"
+        }
+        return "$baseUrl$separator$queryString"
     }
 }

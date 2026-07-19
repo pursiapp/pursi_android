@@ -1,5 +1,6 @@
 package app.pursi.map.overlays
 
+import android.util.Log
 import app.pursi.data.model.WfsFeature
 import app.pursi.water.WaterObservation
 import app.pursi.datasource.core.BoundingBox
@@ -89,7 +90,7 @@ object WfsOverlay {
             val geoFeatures = features.mapNotNull { feature ->
                 try {
                     val feat = when {
-                        feature.geometry.contains("\"Point\"") ->
+                        feature.geometry.matchesGeoType("Point") ->
                             Feature.fromGeometry(Point.fromLngLat(feature.longitude, feature.latitude))
                         else -> null
                     }
@@ -206,7 +207,8 @@ object WfsOverlay {
         // then addPreparedFeatures creates the SymbolLayer with string-based
         // icon interpolation ("{vesiliikennemerkki_icon}"). This is the same
         // pipeline that works correctly for navigation_aid.
-        for ((_, features) in vesiliikennemerkkiFeatures) {
+        for ((source, features) in vesiliikennemerkkiFeatures) {
+            Log.d("VVDebug", "updateVvFeatures: source=$source count=${features.size}")
             WfsLayerManager.addOrUpdateFeatures(style, features, "notice", isNightMode = isNightMode)
         }
     }
@@ -479,4 +481,7 @@ object WfsOverlay {
         }
         return if (geoFeatures.isNotEmpty()) FeatureCollection.fromFeatures(geoFeatures) else null
     }
+
+    private fun String.matchesGeoType(type: String): Boolean =
+        contains("\"$type\"") || contains("\"Multi$type\"")
 }

@@ -22,7 +22,7 @@
     <string name="notification_location_title">Pursi sporer din placering</string>
     <string name="notification_location_text">Bådens position og navigationsdata</string>
     <string name="osm">Vektorkart</string>
-    <string name="nautical_chart">Søkort</string>
+    <string name="nautical_chart">Rasterkort</string>
     <string name="layers">Lag</string>
     <string name="center_on_position">Sentrer på posisjon</string>
     <string name="zoom_in">Zoom ind</string>
@@ -302,7 +302,6 @@
     <string name="onboarding_offline_retry">Prøv igen</string>
     <string name="onboarding_offline_done">Færdig!</string>
     <string name="onboarding_offline_finland_seamarks">OpenSeaMap-sømærker (Europa)</string>
-    <string name="onboarding_offline_finland_charts">Traficom-kort, finske kyst (zoom 8–10)</string>
     <string name="onboarding_offline_finland_vv">Officielle finske navigationsdata</string>
     <string name="onboarding_offline_europe_seamarks">OpenSeaMap-sømærker (Europa)</string>
     <string name="onboarding_offline_total_fmt">I alt: ~%d MB</string>
@@ -313,7 +312,7 @@
     <string name="onboarding_offline_zoom_med">Detaljeret</string>
     <string name="onboarding_offline_zoom_high">Mest detaljeret</string>
     <string name="onboarding_offline_zoom_size_fmt">~%d MB</string>
-    <string name="onboarding_offline_content_charts">Traficom søkort</string>
+    <string name="onboarding_offline_content_charts">Søkort</string>
     <string name="onboarding_offline_content_vector">OpenFreeMap-vektorfliser</string>
     <string name="onboarding_offline_content_seamarks">OpenSeaMap-sømærker</string>
     <string name="onboarding_offline_content_vv">Officielle finske navigationsdata</string>

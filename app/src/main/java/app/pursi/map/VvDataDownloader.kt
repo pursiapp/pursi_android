@@ -263,7 +263,12 @@ class VvDataDownloader(
         reader.endObject()
 
         if (geometryStr == null) return null
-        val bbox = extractBboxStr(geometryStr) ?: return null
+        val bbox = extractBboxStr(geometryStr)
+        if (bbox == null) {
+            Log.w(TAG, "extractBboxStr FAILED for: ${geometryStr.take(150)}")
+            return null
+        }
+        Log.d(TAG, "Feature parsed: geoLen=${geometryStr.length} geoPreview=${geometryStr.take(100)} propsLen=${props.length}")
         return ParsedFeature(geometryStr, props.toString(), bbox)
     }
 
@@ -389,12 +394,34 @@ class VvDataDownloader(
                     val lat = coords.getDouble(1)
                     Bbox(lat, lng, lat, lng, lat, lng)
                 }
-                "LineString" -> {
-                    computeBboxFromCoordArray(coords)
+                "MultiPoint" -> computeBboxFromCoordArray(coords)
+                "LineString" -> computeBboxFromCoordArray(coords)
+                "MultiLineString" -> {
+                    var combined: org.json.JSONArray? = null
+                    for (i in 0 until coords.length()) {
+                        val line = coords.getJSONArray(i)
+                        combined = if (combined == null) line else org.json.JSONArray().apply {
+                            for (j in 0 until combined.length()) put(combined.get(j))
+                            for (j in 0 until line.length()) put(line.get(j))
+                        }
+                    }
+                    if (combined != null) computeBboxFromCoordArray(combined) else null
                 }
                 "Polygon" -> {
                     val ring = coords.getJSONArray(0)
                     computeBboxFromCoordArray(ring)
+                }
+                "MultiPolygon" -> {
+                    var combined: org.json.JSONArray? = null
+                    for (i in 0 until coords.length()) {
+                        val polygon = coords.getJSONArray(i)
+                        val ring = polygon.getJSONArray(0)
+                        combined = if (combined == null) ring else org.json.JSONArray().apply {
+                            for (j in 0 until combined.length()) put(combined.get(j))
+                            for (j in 0 until ring.length()) put(ring.get(j))
+                        }
+                    }
+                    if (combined != null) computeBboxFromCoordArray(combined) else null
                 }
                 else -> null
             }

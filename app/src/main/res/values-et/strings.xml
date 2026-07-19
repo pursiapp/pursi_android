@@ -22,7 +22,7 @@
     <string name="notification_location_title">Pursi jälgib teie asukohta</string>
     <string name="notification_location_text">Paadi asukoht ja navigatsiooniandmed</string>
     <string name="osm">Vektorkaart</string>
-    <string name="nautical_chart">Merekaart</string>
+    <string name="nautical_chart">Rasterkaart</string>
     <string name="layers">Kihid</string>
     <string name="center_on_position">Keskenda asukohale</string>
     <string name="zoom_in">Suurenda</string>
@@ -302,7 +302,6 @@
     <string name="onboarding_offline_retry">Proovi uuesti</string>
     <string name="onboarding_offline_done">Valmis!</string>
     <string name="onboarding_offline_finland_seamarks">OpenSeaMap navigatsioonimärgid (Euroopa)</string>
-    <string name="onboarding_offline_finland_charts">Traficom kaardid, Soome rannik (zoom 8–10)</string>
     <string name="onboarding_offline_finland_vv">Soome ametlikud navigatsiooniandmed</string>
     <string name="onboarding_offline_europe_seamarks">OpenSeaMap navigatsioonimärgid (Euroopa)</string>
     <string name="onboarding_offline_total_fmt">Kokku: ~%d MB</string>
@@ -313,7 +312,7 @@
     <string name="onboarding_offline_zoom_med">Detailne</string>
     <string name="onboarding_offline_zoom_high">Kõige detailsem</string>
     <string name="onboarding_offline_zoom_size_fmt">~%d MB</string>
-    <string name="onboarding_offline_content_charts">Traficom merekaardid</string>
+    <string name="onboarding_offline_content_charts">Merekaardid</string>
     <string name="onboarding_offline_content_vector">OpenFreeMap vektorpildid</string>
     <string name="onboarding_offline_content_seamarks">OpenSeaMap navigatsioonimärgid</string>
     <string name="onboarding_offline_content_vv">Soome ametlikud navigatsiooniandmed</string>

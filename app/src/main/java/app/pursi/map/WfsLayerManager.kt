@@ -1,5 +1,6 @@
 package app.pursi.map
 
+import android.util.Log
 import app.pursi.data.model.WfsFeature
 import app.pursi.datasource.core.FeatureRendererRegistry
 import app.pursi.datasource.core.LayerType
@@ -32,13 +33,13 @@ object WfsLayerManager {
         val geoFeatures = features.mapNotNull { feature ->
             try {
                 val feat = when {
-                    feature.geometry.contains("\"Point\"") ->
+                    feature.geometry.matchesGeoType("Point") ->
                         Feature.fromGeometry(Point.fromLngLat(feature.longitude, feature.latitude))
-                    feature.geometry.contains("\"LineString\"") -> {
+                    feature.geometry.matchesGeoType("LineString") -> {
                         val coords = parseLineStringCoords(feature.geometry)
                         if (coords.size >= 2) Feature.fromGeometry(LineString.fromLngLats(coords)) else null
                     }
-                    feature.geometry.contains("\"Polygon\"") ->
+                    feature.geometry.matchesGeoType("Polygon") ->
                         parsePolygonCoords(feature.geometry)?.let { Feature.fromGeometry(Polygon.fromLngLats(it)) }
                     else -> null
                 }
@@ -55,7 +56,9 @@ object WfsLayerManager {
                     }
                     if (type == "notice") {
                         val vlmla = getProperty(feature.properties, "vlmlajityyppi")?.toIntOrNull() ?: 0
-                        feat.addStringProperty("vesiliikennemerkki_icon", VesiLiikennemerkkiIconMapper.toIconName(vlmla))
+                        val iconName = VesiLiikennemerkkiIconMapper.toIconName(vlmla)
+                        feat.addStringProperty("vesiliikennemerkki_icon", iconName)
+                        Log.d("VVDebug", "addOrUpdate: notice vlmla=$vlmla icon=$iconName src=${feature.source} lat=${feature.latitude} lng=${feature.longitude}")
                     }
                 }
                 feat
@@ -202,22 +205,11 @@ object WfsLayerManager {
                 }
                 try {
                     style.addLayerAbove(layer, "layer-openseamap")
-                } catch (_: Exception) {
+                    Log.d("VVDebug", "addLayerAbove navigation_aid OK: layer=$layerId")
+                } catch (e: Exception) {
+                    Log.w("VVDebug", "addLayerAbove nav_aid failed: ${e.message} -> fallback addLayer")
                     style.addLayer(layer)
                 }
-            }
-            "aton_fault" -> {
-                val layer = SymbolLayer(layerId, sourceId).apply {
-                    setProperties(
-                        PropertyFactory.iconImage("warning_triangle"),
-                        PropertyFactory.iconSize(0.5f * navmarkSizeMultiplier),
-                        PropertyFactory.iconAllowOverlap(true),
-                        PropertyFactory.iconIgnorePlacement(true),
-                        PropertyFactory.iconColor("#E53935")
-                    )
-                    minZoom = 11.0f
-                }
-                style.addLayerAbove(layer, "layer-openseamap")
             }
             "notice" -> {
                 val layer = SymbolLayer(layerId, sourceId).apply {
@@ -238,7 +230,9 @@ object WfsLayerManager {
                 }
                 try {
                     style.addLayerAbove(layer, "layer-openseamap")
-                } catch (_: Exception) {
+                    Log.d("VVDebug", "addLayerAbove notice OK: layer=$layerId")
+                } catch (e: Exception) {
+                    Log.w("VVDebug", "addLayerAbove notice failed: ${e.message} -> fallback addLayer")
                     style.addLayer(layer)
                 }
             }
@@ -441,3 +435,6 @@ object WfsLayerManager {
         }
     }
 }
+
+private fun String.matchesGeoType(type: String): Boolean =
+    contains("\"$type\"") || contains("\"Multi$type\"")

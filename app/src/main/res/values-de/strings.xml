@@ -22,7 +22,7 @@
     <string name="notification_location_title">Pursi verfolgt Ihren Standort</string>
     <string name="notification_location_text">Bootsposition und Navigationsdaten</string>
     <string name="osm">Vektorkarte</string>
-    <string name="nautical_chart">Seekarte</string>
+    <string name="nautical_chart">Rasterkarte</string>
     <string name="layers">Ebenen</string>
     <string name="center_on_position">Auf Position zentrieren</string>
     <string name="zoom_in">Vergrößern</string>
@@ -302,7 +302,6 @@
     <string name="onboarding_offline_retry">Wiederholen</string>
     <string name="onboarding_offline_done">Fertig!</string>
     <string name="onboarding_offline_finland_seamarks">OpenSeaMap-Seezeichen (Europa)</string>
-    <string name="onboarding_offline_finland_charts">Traficom-Karten, finnische Küste (Zoom 8–10)</string>
     <string name="onboarding_offline_finland_vv">Offizielle finnische Navigationsdaten</string>
     <string name="onboarding_offline_europe_seamarks">OpenSeaMap-Seezeichen (Europa)</string>
     <string name="onboarding_offline_total_fmt">Gesamt: ~%d MB</string>
@@ -313,7 +312,7 @@
     <string name="onboarding_offline_zoom_med">Detailiert</string>
     <string name="onboarding_offline_zoom_high">Sehr detailiert</string>
     <string name="onboarding_offline_zoom_size_fmt">~%d MB</string>
-    <string name="onboarding_offline_content_charts">Traficom Seekarten</string>
+    <string name="onboarding_offline_content_charts">Seekarten</string>
     <string name="onboarding_offline_content_vector">OpenFreeMap-Vektorkacheln</string>
     <string name="onboarding_offline_content_seamarks">OpenSeaMap-Seezeichen</string>
     <string name="onboarding_offline_content_vv">Offizielle finnische Navigationsdaten</string>

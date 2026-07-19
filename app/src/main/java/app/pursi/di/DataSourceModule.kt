@@ -25,7 +25,7 @@ import app.pursi.datasource.fi.TraficomDepthProvider
 import app.pursi.datasource.global.EmodnetDepthProvider
 //import app.pursi.datasource.dk.DanishChartProvider
 import app.pursi.datasource.fi.DigitrafficAisProvider
-import app.pursi.datasource.fi.FinnishChartProvider
+// import app.pursi.datasource.fi.FinnishChartProvider  // TEMP: Traficom raster charts disabled
 import app.pursi.datasource.fi.FinnishMarineFeatureProvider
 import app.pursi.datasource.fi.FinnishPropertyMapper
 import app.pursi.datasource.fi.FinnishWarningProvider
@@ -51,10 +51,11 @@ import javax.inject.Singleton
 @InstallIn(SingletonComponent::class)
 object DataSourceModule {
 
-    @Provides
-    @IntoSet
-    fun provideFinnishChartProvider(loader: JsonProviderLoader): ChartProvider =
-        FinnishChartProvider(loader)
+    // TEMP: Traficom raster charts disabled — OSM fallback will be shown in Finland
+    //    @Provides
+    //    @IntoSet
+    //    fun provideFinnishChartProvider(loader: JsonProviderLoader): ChartProvider =
+    //        FinnishChartProvider(loader)
 
     @Provides
     @IntoSet

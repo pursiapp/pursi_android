@@ -22,7 +22,7 @@
     <string name="notification_location_title">Pursi is tracking your location</string>
     <string name="notification_location_text">Boat position and navigation data</string>
     <string name="osm">Vector map</string>
-    <string name="nautical_chart">Nautical chart</string>
+    <string name="nautical_chart">Raster map</string>
     <string name="layers">Layers</string>
     <string name="center_on_position">Center on position</string>
     <string name="zoom_in">Zoom in</string>
@@ -306,7 +306,6 @@
     <string name="onboarding_offline_retry">Retry</string>
     <string name="onboarding_offline_done">Done!</string>
     <string name="onboarding_offline_finland_seamarks">OpenSeaMap seamarks (Europe)</string>
-    <string name="onboarding_offline_finland_charts">Traficom charts, Finnish coast (zoom 8–10)</string>
     <string name="onboarding_offline_finland_vv">Official Finnish navigation data</string>
     <string name="onboarding_offline_europe_seamarks">OpenSeaMap seamarks (Europe)</string>
     <string name="onboarding_offline_total_fmt">Total: ~%d MB</string>
@@ -317,7 +316,7 @@
     <string name="onboarding_offline_zoom_med">Detailed</string>
     <string name="onboarding_offline_zoom_high">Most detailed</string>
     <string name="onboarding_offline_zoom_size_fmt">~%d MB</string>
-    <string name="onboarding_offline_content_charts">Traficom nautical charts</string>
+    <string name="onboarding_offline_content_charts">Nautical charts</string>
     <string name="onboarding_offline_content_vector">OpenFreeMap vector tiles</string>
     <string name="onboarding_offline_content_seamarks">OpenSeaMap seamarks</string>
     <string name="onboarding_offline_content_vv">Finnish official nav data</string>

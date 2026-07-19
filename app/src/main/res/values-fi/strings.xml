@@ -22,7 +22,7 @@
     <string name="notification_location_title">Pursi seuraa sijaintiasi</string>
     <string name="notification_location_text">Veneen sijainti ja navigointitiedot</string>
     <string name="osm">Vektorikartta</string>
-    <string name="nautical_chart">Merikortti</string>
+    <string name="nautical_chart">Rasterikartta</string>
     <string name="layers">Kerrokset</string>
     <string name="center_on_position">Keskitä sijaintiin</string>
     <string name="zoom_in">Zoomaa sisään</string>
@@ -306,7 +306,6 @@
     <string name="onboarding_offline_retry">Yritä uudelleen</string>
     <string name="onboarding_offline_done">Valmis!</string>
     <string name="onboarding_offline_finland_seamarks">OpenSeaMap-merimerkit (Eurooppa)</string>
-    <string name="onboarding_offline_finland_charts">Traficom-kartat, Suomen rannikko (zoom 8–9)</string>
     <string name="onboarding_offline_finland_vv">Väyläviraston virallinen navigointidata</string>
     <string name="onboarding_offline_europe_seamarks">OpenSeaMap-merimerkit (Eurooppa)</string>
     <string name="onboarding_offline_total_fmt">Yhteensä: ~%d Mt</string>
@@ -317,7 +316,7 @@
     <string name="onboarding_offline_zoom_med">Tarkempi</string>
     <string name="onboarding_offline_zoom_high">Tarkin</string>
     <string name="onboarding_offline_zoom_size_fmt">~%d Mt</string>
-    <string name="onboarding_offline_content_charts">Traficom merikartat</string>
+    <string name="onboarding_offline_content_charts">Merikartat</string>
     <string name="onboarding_offline_content_vector">OpenFreeMap-vektoritiilet</string>
     <string name="onboarding_offline_content_seamarks">OpenSeaMap-merimerkit</string>
     <string name="onboarding_offline_content_vv">Väyläviraston data</string>

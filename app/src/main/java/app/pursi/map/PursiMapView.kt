@@ -4,6 +4,7 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
+import android.util.Log
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RectF
@@ -469,7 +470,7 @@ fun PursiMapView(
     // Track last loaded state to avoid duplicate style loads and server restarts
     var lastStyleUri by remember { mutableStateOf<String?>(null) }
     var lastReloadTrigger by remember { mutableStateOf(0) }
-    var lastServerFileSet by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var lastServerFileSet by remember { mutableStateOf<Set<String>?>(null) }
     var seamarkLayerIds by remember { mutableStateOf<List<String>>(emptyList()) }
 
     LaunchedEffect(seamarksDownloaded, downloadedSeamarkContinents, currentMap.value, reloadTrigger, isNightMode) {
@@ -484,7 +485,7 @@ fun PursiMapView(
         ) + continentFiles
         val currentFileSet = allLocalFiles.map { it.absolutePath }.toSet()
 
-        if (currentFileSet != lastServerFileSet) {
+        if (lastServerFileSet == null || currentFileSet != lastServerFileSet) {
             lastServerFileSet = currentFileSet
             TileServerManager.releaseSeamarkServer()
             val pmtilesFiles = allLocalFiles
@@ -543,6 +544,7 @@ fun PursiMapView(
                 }
                 currentStyle.value = style
                 seamarkLayerIds = ChartOverlay.getSeamarkLayerIds(style)
+                Log.d("SeamarkDebug", "Style loaded: layers=${style.layers.size} seamarkLayerIds=$seamarkLayerIds allIds=${style.layers.filter { it.id?.startsWith("DYNAMIC") == true }.map { it.id }}")
                 mapReadyToken++
             }
         }
@@ -850,9 +852,12 @@ fun PursiMapView(
 
     var turvalaiteGen by remember { mutableStateOf(0) }
     var hideForTurvalaite by remember { mutableStateOf(false) }
+    var hideForNotice by remember { mutableStateOf(false) }
 
     LaunchedEffect(mapReadyToken, showVvNavmarks, turvalaiteFeatures, turvalaitevikaFeatures, vvFetchCounter, navmarkSize, chartOpacity) {
         val map = currentMap.value as? MapLibreMap ?: return@LaunchedEffect
+        val featureCount = turvalaiteFeatures.values.sumOf { it.size } + turvalaitevikaFeatures.values.sumOf { it.size }
+        Log.d("SeamarkDebug", "Turvalaite effect: showVvNavmarks=$showVvNavmarks, featureCount=$featureCount, chartOpacity=$chartOpacity, vvFetchCounter=$vvFetchCounter")
         if (!showVvNavmarks) {
             map.getStyle { style ->
                 WfsOverlay.applyTurvalaite(style, null, false, navmarkSize.multiplier, isNightMode, chartOpacity)
@@ -864,9 +869,10 @@ fun PursiMapView(
         val prepared = withContext(Dispatchers.Default) {
             WfsOverlay.prepareTurvalaite(showVvNavmarks, turvalaiteFeatures, turvalaitevikaFeatures)
         }
-        val viewport = currentViewportBounds
+        val viewport = currentViewportBounds?.expanded(1.5)
         val hasFeaturesInView = prepared != null && WfsOverlay.hasTurvalaiteInView(prepared, viewport)
         hideForTurvalaite = hasFeaturesInView
+        Log.d("SeamarkDebug", "Turvalaite effect: hasFeaturesInView=$hasFeaturesInView, hideForTurvalaite=$hideForTurvalaite, prepared=${prepared?.size}")
         map.getStyle { style ->
             if (turvalaiteGen != myGen) return@getStyle
             WfsOverlay.applyTurvalaite(style, prepared, hasFeaturesInView, navmarkSize.multiplier, isNightMode, chartOpacity)
@@ -875,6 +881,9 @@ fun PursiMapView(
             // visibility set by the earlier LaunchedEffect is lost; running
             // updateSeamarkVisibility here ensures the slider setting takes effect.
             ChartOverlay.updateSeamarkVisibility(style, seamarkLayerIds, chartOpacity)
+            // setDynamicIconVisibility is handled by the VV LaunchedEffect which
+            // knows about both hideForTurvalaite and hideForNotice. Calling it here
+            // with hideForNotice=false would overwrite the VV effect's correct state.
         }
     }
 
@@ -882,6 +891,8 @@ fun PursiMapView(
 
     LaunchedEffect(mapReadyToken, showVvNavmarks, showSectors, navlineFeatures, fairwayFeatures, valosektoriFeatures, vesiliikennemerkkiFeatures, vvFetchCounter) {
         val map = currentMap.value as? MapLibreMap ?: return@LaunchedEffect
+        val noticeCount = vesiliikennemerkkiFeatures.values.sumOf { it.size }
+        Log.d("SeamarkDebug", "VV overlay effect: showVvNavmarks=$showVvNavmarks, noticeCount=$noticeCount, vvFetchCounter=$vvFetchCounter")
         if (!showVvNavmarks) {
             map.getStyle { style ->
                 WfsOverlay.updateVvFeatures(style, showVvNavmarks, showSectors, navlineFeatures, fairwayFeatures, valosektoriFeatures, vesiliikennemerkkiFeatures, isNightMode)
@@ -897,7 +908,17 @@ fun PursiMapView(
             // have been added/updated. The visibility calls are cumulative and
             // independent of the rendering pipeline used by updateVvFeatures.
             ChartOverlay.updateSeamarkVisibility(style, seamarkLayerIds, chartOpacity)
-            val hideForNotice = vesiliikennemerkkiFeatures.values.any { it.isNotEmpty() }
+            hideForNotice = vesiliikennemerkkiFeatures.values.any { it.isNotEmpty() }
+            Log.d("SeamarkDebug", "VV overlay: hideForNotice=$hideForNotice, hideForTurvalaite=$hideForTurvalaite, chartOpacity=$chartOpacity")
+        }
+    }
+
+    // Separate lightweight effect for DYNAMIC_icon visibility. Reacts to slider
+    // changes (chartOpacity), turvalaite visibility, and notice visibility without
+    // triggering the expensive updateVvFeatures processing on every slider tick.
+    LaunchedEffect(mapReadyToken, chartOpacity, hideForTurvalaite, hideForNotice) {
+        val map = currentMap.value as? MapLibreMap ?: return@LaunchedEffect
+        map.getStyle { style ->
             ChartOverlay.setDynamicIconVisibility(
                 style = style,
                 hideForTurvalaite = hideForTurvalaite,

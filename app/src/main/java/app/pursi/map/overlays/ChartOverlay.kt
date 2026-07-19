@@ -1,5 +1,6 @@
 package app.pursi.map.overlays
 
+import android.util.Log
 import app.pursi.datasource.core.ChartProvider
 import org.maplibre.android.maps.Style
 import org.maplibre.android.style.layers.PropertyFactory
@@ -89,6 +90,12 @@ object ChartOverlay {
             )
             osmSeaLayer.setMinZoom(4f)
             style.addLayerBelow(osmSeaLayer, "layer-seamark-bottom")
+
+            if (chartProviders.isNotEmpty()) {
+                style.getLayer(osmSeamarkId)?.setProperties(
+                    PropertyFactory.rasterOpacity(0f)
+                )
+            }
         }
 
         val chartRefLayer = "layer-seamark-bottom"
@@ -182,6 +189,7 @@ object ChartOverlay {
     fun updateSeamarkVisibility(style: Style, seamarkLayerIds: List<String>, chartOpacity: Float) {
         val shouldHide = chartOpacity > 0.85f
         val v = if (shouldHide) Property.NONE else Property.VISIBLE
+        Log.d("SeamarkDebug", "updateSeamarkVisibility: chartOpacity=$chartOpacity, shouldHide=$shouldHide, v=$v, layers=${seamarkLayerIds.size}")
         for (id in seamarkLayerIds) {
             style.getLayer(id)?.setProperties(
                 PropertyFactory.visibility(v)
@@ -214,16 +222,27 @@ object ChartOverlay {
     ) {
         val hide = hideForTurvalaite || hideForNotice || chartOpacity > 0.85f
         val visibility = if (hide) Property.NONE else Property.VISIBLE
-        for (layerId in listOf("DYNAMIC_icon_fixed_rotation", "DYNAMIC_icon_free_rotation")) {
-            style.getLayer(layerId)?.setProperties(
-                PropertyFactory.visibility(visibility)
-            )
+        Log.d("SeamarkDebug", "setDynamicIconVisibility: hideForTurvalaite=$hideForTurvalaite, hideForNotice=$hideForNotice, chartOpacity=$chartOpacity, hide=$hide, visibility=$visibility")
+        var hidden = 0
+        var skipped = 0
+        for (layer in style.layers) {
+            val id = layer.id ?: continue
+            if (id.startsWith("layer-") || id.startsWith("fallback-") || id == "background-water" || id.startsWith("DYNAMIC_burgee")) {
+                skipped++; continue
+            }
+            if (id.startsWith("DYNAMIC_icon")) {
+                layer.setProperties(PropertyFactory.visibility(visibility))
+                hidden++
+            } else {
+                skipped++
+            }
         }
+        Log.d("SeamarkDebug", "  hidden=$hidden skipped=$skipped total=${style.layers.size}")
     }
 
     fun getSeamarkLayerIds(style: Style): List<String> {
         return style.layers
-            .filter { it.id.startsWith("seamark_") || it.id.startsWith("DYNAMIC_icon") }
+            .filter { it.id.startsWith("seamark_") }
             .map { it.id }
     }
 }

@@ -872,6 +872,7 @@ class MapViewModel @Inject constructor(
             val (turvalaiteResult, net1) = fetchGroup("navigation_aid")
             val (sektoriResult, net2) = fetchGroup("light_sector")
             val (vesiMerkkiResult, net3) = fetchGroup("notice")
+            android.util.Log.d("VVDebug", "MapVM fetch: nav_id=${turvalaiteResult.values.sumOf { it.size }}, sectors=${sektoriResult.values.sumOf { it.size }}, notice=${vesiMerkkiResult.values.sumOf { it.size }}, net=$net1")
             val (navlineResult, net4) = fetchGroup("navigation_line")
             val (fairwayResult, net5) = fetchGroup("fairway")
 
