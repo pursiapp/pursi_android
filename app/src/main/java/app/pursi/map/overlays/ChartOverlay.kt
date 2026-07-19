@@ -15,14 +15,17 @@ object ChartOverlay {
     private const val OPENSEAMAP_SUBDIR = "openseamap"
     private const val OPENSEAMAP_MINZOOM = 4f
 
-    private val WFS_SEAMARK_LAYER_PREFIXES = listOf(
-        "layer-wfs-aton", "layer-wfs-aton-fault",
-        "layer-wfs-light-sector", "layer-wfs-notice",
-        "layer-wfs-navline", "layer-wfs-fairway"
+    private val WFS_SEAMARK_TYPES = setOf(
+        "navigation_aid", "light", "daymark",
+        "aton_fault", "notice", "light_sector",
+        "navigation_line", "fairway"
     )
 
     private fun isWfsSeamarkLayer(id: String): Boolean {
-        return WFS_SEAMARK_LAYER_PREFIXES.any { id == it || id.startsWith("$it-") }
+        if (!id.startsWith("layer-wfs-")) return false
+        return WFS_SEAMARK_TYPES.any { type ->
+            id.endsWith("-$type") || id.endsWith("-$type-label")
+        }
     }
 
     fun updateLayers(

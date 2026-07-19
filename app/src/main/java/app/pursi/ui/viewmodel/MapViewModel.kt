@@ -300,7 +300,7 @@ class MapViewModel @Inject constructor(
             showRadar = boolPref("showRadar", false),
             showAis = boolPref("showAis", false),
             radarOpacity = 0.4f,
-            chartOpacity = savedStateHandle.get<Float>("chartOpacity") ?: 1.0f,
+            chartOpacity = savedStateHandle.get<Float>("chartOpacity") ?: 0.0f,
             chartProviders = allChartProviders,
             lookAheadSec = savedStateHandle.get<Int>("lookAheadSec") ?: 5,
             followMode = savedStateHandle.get<FollowMode>("followMode") ?: FollowMode.CENTERED,

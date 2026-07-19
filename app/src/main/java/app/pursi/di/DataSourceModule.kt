@@ -38,7 +38,7 @@ import app.pursi.datasource.global.RainViewerTimestampSource
 import app.pursi.datasource.global.RainViewerTimestampSourceImpl
 import app.pursi.datasource.no.MetNorwayWarningProvider
 import app.pursi.datasource.no.MetNorwayWeatherProvider
-import app.pursi.datasource.no.NorwegianChartProvider
+// import app.pursi.datasource.no.NorwegianChartProvider  // TEMP: Norwegian raster charts disabled
 import app.pursi.datasource.se.SmhiWarningProvider
 import app.pursi.data.wfs.WfsClient
 import app.pursi.weather.FmiClient
@@ -56,6 +56,10 @@ object DataSourceModule {
     //    @IntoSet
     //    fun provideFinnishChartProvider(loader: JsonProviderLoader): ChartProvider =
     //        FinnishChartProvider(loader)
+
+    // TEMP: No raster chart providers active — provide empty set
+    @Provides
+    fun provideChartProviders(): Set<@JvmSuppressWildcards ChartProvider> = emptySet()
 
     @Provides
     @IntoSet
@@ -81,10 +85,11 @@ object DataSourceModule {
     ): MarineFeatureProvider =
         FinnishMarineFeatureProvider(db, client, loader)
 
-    @Provides
-    @IntoSet
-    fun provideNorwegianChartProvider(loader: JsonProviderLoader): ChartProvider =
-        NorwegianChartProvider(loader)
+    // TEMP: Norwegian raster charts disabled — OSM fallback will be shown in Norway
+    //    @Provides
+    //    @IntoSet
+    //    fun provideNorwegianChartProvider(loader: JsonProviderLoader): ChartProvider =
+    //        NorwegianChartProvider(loader)
 
 //    @Provides
 //    @IntoSet

@@ -28,7 +28,7 @@ data class MapUiState(
     val radarOpacity: Float = 0.4f,
     val radarTimeOffset: Int = 0,
     val radarEffectiveDelay: Int = 0,
-    val chartOpacity: Float = 1.0f,
+    val chartOpacity: Float = 0.0f,
     val chartProviders: List<ChartProvider> = emptyList(),
     val lookAheadSec: Int = 5,
     val currentTrackId: String? = null,

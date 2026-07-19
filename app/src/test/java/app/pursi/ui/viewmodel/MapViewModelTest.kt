@@ -90,7 +90,7 @@ class MapViewModelTest {
             assertFalse(state.showWarnings)
             assertFalse(state.showRadar)
             assertEquals(0.7f, state.radarOpacity, 0.01f)
-            assertEquals(1.0f, state.chartOpacity, 0.01f)
+            assertEquals(0.0f, state.chartOpacity, 0.01f)
             assertEquals(5, state.lookAheadSec)
             assertEquals(FollowMode.CENTERED, state.followMode)
             assertEquals(OrientationMode.NORTH_UP, state.orientationMode)
@@ -133,7 +133,7 @@ class MapViewModelTest {
     @Test
     fun `setChartOpacity updates opacity`() = runTest {
         viewModel.uiState.test {
-            assertEquals(1.0f, awaitItem().chartOpacity, 0.01f)
+            assertEquals(0.0f, awaitItem().chartOpacity, 0.01f)
             viewModel.setChartOpacity(0.5f)
             assertEquals(0.5f, awaitItem().chartOpacity, 0.01f)
             cancelAndIgnoreRemainingEvents()
