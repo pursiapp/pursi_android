@@ -19,13 +19,13 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.sync.Mutex
@@ -126,10 +126,9 @@ class WeatherRepository @Inject constructor(
     @Volatile private var lastFetchLat = Double.NaN
     @Volatile private var lastFetchLon = Double.NaN
 
-    // Suspend-on-background gate (S3.1). When `paused`, loops idle at 1s cadence
-    // instead of running while the app is backgrounded — a brief background doesn't
-    // cancel/restart them.
-    @Volatile private var paused: Boolean = false
+    // Suspend-on-background gate (S3.1). When paused, loops suspend via flow signal
+    // instead of 1 Hz polling. A brief background doesn't cancel/restart them.
+    private val _paused = MutableStateFlow(false)
 
     // Network-restore collector (S3.2) — refreshed only on state changes.
     private var networkRestoreJob: Job? = null
@@ -214,16 +213,16 @@ class WeatherRepository @Inject constructor(
 
     /** Suspend-on-background gate; called from loops to idle while paused. */
     private suspend fun pauseGate() {
-        while (paused && currentCoroutineContext()[Job]?.isActive != false) {
-            delay(1_000L)
+        if (_paused.value) {
+            _paused.first { !it }
         }
     }
 
     /** Called by MainActivity.onStop — loops idle but stay running. */
-    fun pause() { paused = true }
+    fun pause() { _paused.value = true }
 
     /** Called by MainActivity.onStart — loops resume. */
-    fun resume() { paused = false }
+    fun resume() { _paused.value = false }
 
     private fun refreshRegionalRadarCaches() {
         if (lastFetchLat.isNaN() || lastFetchLon.isNaN()) return

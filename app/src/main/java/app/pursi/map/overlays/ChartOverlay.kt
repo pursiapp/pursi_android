@@ -56,9 +56,15 @@ object ChartOverlay {
                 ts.attribution = "© OpenSeaMap contributors"
                 style.addSource(RasterSource(OPENSEAMAP_SOURCE_ID, ts, 256))
                 val osLayer = RasterLayer(OPENSEAMAP_LAYER_ID, OPENSEAMAP_SOURCE_ID)
-                osLayer.setProperties(PropertyFactory.rasterOpacity(0.7f), PropertyFactory.rasterResampling("nearest"))
+                osLayer.setProperties(PropertyFactory.rasterOpacity(chartOpacity), PropertyFactory.rasterResampling("nearest"))
                 osLayer.setMinZoom(OPENSEAMAP_MINZOOM)
                 style.addLayerBelow(osLayer, "layer-seamark-bottom")
+
+                if (chartProviders.isNotEmpty()) {
+                    style.getLayer(OPENSEAMAP_LAYER_ID)?.setProperties(
+                        PropertyFactory.rasterOpacity(0f)
+                    )
+                }
             }
         }
 

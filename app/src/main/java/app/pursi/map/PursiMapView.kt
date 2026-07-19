@@ -81,6 +81,9 @@ import kotlinx.coroutines.flow.sample
 import kotlinx.coroutines.withContext
 import org.maplibre.geojson.Polygon
 import kotlin.time.Duration.Companion.milliseconds
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
 
 @OptIn(FlowPreview::class)
 @Composable
@@ -551,11 +554,15 @@ fun PursiMapView(
     }
 
     // Periodic tile retry — every 5 seconds to retry failed tiles (both raster & vector)
-    LaunchedEffect(currentMap.value) {
+    // Only runs while lifecycle is at least STARTED (visible/foreground).
+    val lifecycleOwner = LocalLifecycleOwner.current
+    LaunchedEffect(currentMap.value, lifecycleOwner) {
         val map = currentMap.value ?: return@LaunchedEffect
-        while (true) {
-            kotlinx.coroutines.delay(5_000L)
-            map.triggerRepaint()
+        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            while (true) {
+                kotlinx.coroutines.delay(5_000L)
+                map.triggerRepaint()
+            }
         }
     }
 

@@ -16,6 +16,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.os.PowerManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import dagger.hilt.android.AndroidEntryPoint
@@ -56,6 +57,10 @@ class LocationService : Service() {
     private var isLowPowerMode = false
     private var lowPowerStartTime = 0L
     private var lastIntervalChangeMs = 0L
+
+    private val powerManager by lazy {
+        getSystemService(Context.POWER_SERVICE) as PowerManager
+    }
 
     override fun onCreate() {
         super.onCreate()
@@ -173,10 +178,22 @@ class LocationService : Service() {
     }
 
     private fun adaptInterval(location: Location) {
-        val speed = if (location.hasSpeed()) location.speed else 0f
         val now = System.currentTimeMillis()
-
         if (now - lastIntervalChangeMs < 5000L) return
+
+        val screenOn = powerManager.isInteractive
+
+        // Näyttö pois: harva 30 s päivitys, ei reagoi nopeuteen
+        if (!screenOn) {
+            if (intervalMs != BACKGROUND_INTERVAL_MS) {
+                Log.d(TAG, "Screen off: switching to ${BACKGROUND_INTERVAL_MS}ms")
+                lastIntervalChangeMs = now
+                scheduleIntervalChange(BACKGROUND_INTERVAL_MS)
+            }
+            return
+        }
+
+        val speed = if (location.hasSpeed()) location.speed else 0f
 
         if (isLowPowerMode) {
             if (speed >= SPEED_THRESHOLD_HIGH) {
@@ -217,5 +234,6 @@ class LocationService : Service() {
         private const val SPEED_THRESHOLD_LOW = 0.3f
         private const val SPEED_THRESHOLD_HIGH = 0.8f
         private const val LOW_POWER_DELAY_MS = 15000L
+        private const val BACKGROUND_INTERVAL_MS = 30_000L
     }
 }
