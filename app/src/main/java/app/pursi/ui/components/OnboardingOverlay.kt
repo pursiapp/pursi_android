@@ -50,8 +50,6 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import app.pursi.R
 import app.pursi.location.LocationService
-import app.pursi.map.LatLngRect
-import app.pursi.map.TileSource
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -75,16 +73,6 @@ private enum class OfflinePhase {
     FAILED
 }
 
-private enum class ZoomLevel(
-    val minZoom: Int,
-    val maxZoom: Int,
-    val chartsMb: Int
-) {
-    LOW(8, 9, 13),
-    MEDIUM(8, 10, 55),
-    HIGH(8, 11, 222)
-}
-
 @Composable
 fun OnboardingOverlay(
     onComplete: () -> Unit,
@@ -93,8 +81,7 @@ fun OnboardingOverlay(
     pmtilesDownloader: app.pursi.map.PmtilesDownloader? = null,
     vvDataDownloader: app.pursi.map.VvDataDownloader? = null,
     currentLatLng: LatLng? = null,
-    onChooseCustom: (() -> Unit)? = null,
-    tileSources: List<TileSource>? = null
+    onChooseCustom: (() -> Unit)? = null
 ) {
     var step by remember { mutableStateOf(OnboardingStep.DISCLAIMER) }
 
@@ -146,7 +133,6 @@ fun OnboardingOverlay(
                     vvDataDownloader = vvDataDownloader,
                     currentLatLng = currentLatLng,
                     onChooseCustom = onChooseCustom,
-                    tileSources = tileSources,
                     onSkip = { step = OnboardingStep.TIPS },
                     onComplete = onComplete
                 )
@@ -270,7 +256,6 @@ private fun OfflinePrepContent(
     vvDataDownloader: app.pursi.map.VvDataDownloader?,
     currentLatLng: LatLng?,
     onChooseCustom: (() -> Unit)?,
-    tileSources: List<TileSource>?,
     onSkip: () -> Unit,
     onComplete: () -> Unit
 ) {
@@ -278,7 +263,6 @@ private fun OfflinePrepContent(
     var phase by remember { mutableStateOf(OfflinePhase.DETECTING) }
     var profile by remember { mutableStateOf(OnboardingProfile.EUROPE) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
-    var selectedZoom by remember { mutableStateOf(ZoomLevel.HIGH) }
 
     val pmtilesContinentProgress by pmtilesDownloader?.continentProgress?.collectAsState()
         ?: remember { mutableStateOf(emptyMap()) }
@@ -291,22 +275,9 @@ private fun OfflinePrepContent(
         phase = OfflinePhase.IDLE
     }
 
-    val finlandRect = remember {
-        LatLngRect(minLat = 58.5, maxLat = 70.5, minLng = 19.0, maxLng = 32.0)
-    }
-
     val pmtilesMb = 80
     val vvMb = 12
-    val totalMb = if (profile == OnboardingProfile.FINLAND)
-        pmtilesMb + vvMb + selectedZoom.chartsMb
-    else
-        pmtilesMb
-
-    val zoomLabels = listOf(
-        R.string.onboarding_offline_zoom_low to ZoomLevel.LOW,
-        R.string.onboarding_offline_zoom_med to ZoomLevel.MEDIUM,
-        R.string.onboarding_offline_zoom_high to ZoomLevel.HIGH
-    )
+    val totalMb = pmtilesMb + if (profile == OnboardingProfile.FINLAND) vvMb else 0
 
     Box(
         modifier = Modifier.fillMaxSize(),
@@ -357,63 +328,9 @@ private fun OfflinePrepContent(
                     )
                     Spacer(Modifier.height(12.dp))
 
-                    if (profile == OnboardingProfile.FINLAND) {
-                        Text(
-                            text = stringResource(R.string.onboarding_offline_zoom_label),
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Spacer(Modifier.height(8.dp))
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            zoomLabels.forEach { (labelRes, level) ->
-                                val isSelected = selectedZoom == level
-                                val size = if (profile == OnboardingProfile.FINLAND)
-                                    pmtilesMb + vvMb + level.chartsMb
-                                else pmtilesMb
-                                Button(
-                                    onClick = { selectedZoom = level },
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .height(56.dp),
-                                    shape = RoundedCornerShape(12.dp),
-                                    colors = if (isSelected) ButtonDefaults.buttonColors()
-                                    else ButtonDefaults.buttonColors(
-                                        containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                                        contentColor = MaterialTheme.colorScheme.onSurfaceVariant
-                                    ),
-                                    contentPadding = androidx.compose.foundation.layout.PaddingValues(4.dp)
-                                ) {
-                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                        Text(
-                                            text = stringResource(labelRes),
-                                            fontSize = 12.sp,
-                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                            maxLines = 1
-                                        )
-                                        Text(
-                                            text = stringResource(R.string.onboarding_offline_zoom_size_fmt, size),
-                                            fontSize = 10.sp,
-                                            maxLines = 1
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                        Spacer(Modifier.height(16.dp))
-                    }
-
                     Column(
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp)
                     ) {
-                        if (profile == OnboardingProfile.FINLAND) {
-                            ContentRow(
-                                nameRes = R.string.onboarding_offline_content_charts,
-                                sizeMb = selectedZoom.chartsMb
-                            )
-                        }
                         ContentRow(
                             nameRes = R.string.onboarding_offline_content_seamarks,
                             sizeMb = pmtilesMb
@@ -445,32 +362,13 @@ private fun OfflinePrepContent(
                     Spacer(Modifier.height(16.dp))
 
                     val failedNetworkMsg = stringResource(R.string.onboarding_offline_failed_network)
-                    if (downloadManager != null && pmtilesDownloader != null) {
+                    if (pmtilesDownloader != null) {
                         Button(
                             onClick = {
                                 scope.launch {
                                     phase = OfflinePhase.DOWNLOADING
                                     errorMessage = null
 
-                                    // Fire-and-forget: chart downloads continue in background
-                                    if (profile == OnboardingProfile.FINLAND) {
-                                        launch {
-                                            val traficomSources = tileSources?.filter { it.providerId == "fi-traficom" }
-                                            if (!traficomSources.isNullOrEmpty()) {
-                                                downloadManager.enqueueAndAwait(
-                                                    name = "Onboarding: Traficom",
-                                                    rectangles = listOf(finlandRect),
-                                                    minZoom = selectedZoom.minZoom,
-                                                    maxZoom = selectedZoom.maxZoom,
-                                                    selectedLayers = emptyList(),
-                                                    providerIds = listOf("fi-traficom"),
-                                                    tileSources = traficomSources
-                                                )
-                                            }
-                                        }
-                                    }
-
-                                    // Await only fast tasks: PMTiles + VV data
                                     val fastTasks = mutableListOf<kotlinx.coroutines.Deferred<Boolean>>()
                                     fastTasks += async { pmtilesDownloader.downloadContinent("europe") }
                                     if (profile == OnboardingProfile.FINLAND) {
@@ -540,6 +438,25 @@ private fun OfflinePrepContent(
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.primary
                     )
+                    Spacer(Modifier.height(16.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        OutlinedButton(
+                            onClick = onComplete,
+                            modifier = Modifier.weight(1f).height(48.dp),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Text(stringResource(R.string.onboarding_offline_start_using), fontSize = 14.sp)
+                        }
+                        if (onChooseCustom != null) {
+                            Button(
+                                onClick = { onChooseCustom?.invoke() },
+                                modifier = Modifier.weight(1f).height(48.dp),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Text(stringResource(R.string.onboarding_offline_open_settings), fontSize = 14.sp)
+                            }
+                        }
+                    }
                 }
                 OfflinePhase.FAILED -> {
                     Text(
@@ -572,7 +489,7 @@ private fun ContentRow(nameRes: Int, sizeMb: Int) {
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
-            text = "•",
+            text = "\u2022",
             color = MaterialTheme.colorScheme.primary,
             fontSize = 16.sp
         )

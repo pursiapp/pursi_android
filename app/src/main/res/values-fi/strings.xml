@@ -294,9 +294,9 @@
     <string name="onboarding_tip_nav">Sää, reitit ja asetukset löytyvät alavalikosta</string>
     <string name="onboarding_tip_longpress">Pitkällä painalluksella kartalle voit aloittaa reitin suunnittelun</string>
     <string name="onboarding_close">Sulje</string>
-    <string name="onboarding_offline_title">Lataa kartat offline-käyttöön</string>
-    <string name="onboarding_offline_body">Nämä tiedot ovat käytettävissä kartalla myös ilman verkkoyhteyttä.</string>
-    <string name="onboarding_offline_recommendation">Suosittelemme lataamaan seuraavat offline-käyttöön.</string>
+    <string name="onboarding_offline_title">Lataa merimerkit offline-käyttöön</string>
+    <string name="onboarding_offline_body">Merimerkit ja navigointitiedot näkyvät kartalla myös ilman verkkoyhteyttä.</string>
+    <string name="onboarding_offline_recommendation">Lataa seuraavat, jotta ne toimivat ilman verkkoyhteyttä:</string>
     <string name="onboarding_offline_download_now_fmt">Lataa nyt (~%d Mt)</string>
     <string name="onboarding_offline_choose_custom">Valitse itse</string>
     <string name="onboarding_offline_skip">Ohita</string>
@@ -310,18 +310,13 @@
     <string name="onboarding_offline_europe_seamarks">OpenSeaMap-merimerkit (Eurooppa)</string>
     <string name="onboarding_offline_total_fmt">Yhteensä: ~%d Mt</string>
     <string name="onboarding_offline_detecting">Tunnistetaan aluettasi…</string>
-    <string name="onboarding_offline_footer">Voit myöhemmin ladata lisää karttoja offline-käyttöön Asetukset-välilehden kautta.</string>
-    <string name="onboarding_offline_zoom_label">Tarkkuus</string>
-    <string name="onboarding_offline_zoom_low">Yleiskuva</string>
-    <string name="onboarding_offline_zoom_med">Tarkempi</string>
-    <string name="onboarding_offline_zoom_high">Tarkin</string>
-    <string name="onboarding_offline_zoom_size_fmt">~%d Mt</string>
-    <string name="onboarding_offline_content_charts">Merikartat</string>
-    <string name="onboarding_offline_content_vector">OpenFreeMap-vektoritiilet</string>
-    <string name="onboarding_offline_content_seamarks">OpenSeaMap-merimerkit</string>
-    <string name="onboarding_offline_content_vv">Väyläviraston data</string>
+    <string name="onboarding_offline_footer">Kartan taustaa (merikarttoja) ei ladata tässä. Avaa Asetukset-välilehti ladataksesi kartta-alueita offline-käyttöön.</string>
+    <string name="onboarding_offline_content_seamarks">OpenSeaMap-merimerkit (Eurooppa)</string>
+    <string name="onboarding_offline_content_vv">Suomen viralliset merimerkit</string>
     <string name="onboarding_offline_progress_status_pmtiles">Ladataan merimerkkejä… %d%%</string>
-    <string name="onboarding_offline_progress_status_vv">Ladataan virallista dataa…</string>
+    <string name="onboarding_offline_progress_status_vv">Ladataan merimerkkejä…</string>
+    <string name="onboarding_offline_open_settings">Avaa offline-lataukset</string>
+    <string name="onboarding_offline_start_using">Aloita käyttäminen</string>
     <string name="report_bug">Ilmoita virheestä</string>
     <string name="report_bug_url">https://github.com/pursiapp/pursi_android/issues</string>
 

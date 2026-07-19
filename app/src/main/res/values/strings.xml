@@ -294,9 +294,9 @@
     <string name="onboarding_tip_nav">Weather, routes and settings are in the bottom navigation bar</string>
     <string name="onboarding_tip_longpress">Long-press on the map to start planning a route</string>
     <string name="onboarding_close">Close</string>
-    <string name="onboarding_offline_title">Download maps for offline use</string>
-    <string name="onboarding_offline_body">These will be available on the map even without an internet connection.</string>
-    <string name="onboarding_offline_recommendation">We recommend downloading the following for offline use.</string>
+    <string name="onboarding_offline_title">Download sea marks for offline use</string>
+    <string name="onboarding_offline_body">Sea marks and navigation data will be shown on the chart even without an internet connection.</string>
+    <string name="onboarding_offline_recommendation">Download the following so they work without an internet connection:</string>
     <string name="onboarding_offline_download_now_fmt">Download now (~%d MB)</string>
     <string name="onboarding_offline_choose_custom">Choose custom area</string>
     <string name="onboarding_offline_skip">Skip</string>
@@ -310,18 +310,13 @@
     <string name="onboarding_offline_europe_seamarks">OpenSeaMap seamarks (Europe)</string>
     <string name="onboarding_offline_total_fmt">Total: ~%d MB</string>
     <string name="onboarding_offline_detecting">Detecting your region…</string>
-    <string name="onboarding_offline_footer">You can download more maps for offline use later from the Settings tab.</string>
-    <string name="onboarding_offline_zoom_label">Detail level</string>
-    <string name="onboarding_offline_zoom_low">Overview</string>
-    <string name="onboarding_offline_zoom_med">Detailed</string>
-    <string name="onboarding_offline_zoom_high">Most detailed</string>
-    <string name="onboarding_offline_zoom_size_fmt">~%d MB</string>
-    <string name="onboarding_offline_content_charts">Nautical charts</string>
-    <string name="onboarding_offline_content_vector">OpenFreeMap vector tiles</string>
-    <string name="onboarding_offline_content_seamarks">OpenSeaMap seamarks</string>
-    <string name="onboarding_offline_content_vv">Finnish official nav data</string>
+    <string name="onboarding_offline_footer">Map tiles (chart backgrounds) are not downloaded here. Open the Settings tab to download chart areas for offline use.</string>
+    <string name="onboarding_offline_content_seamarks">OpenSeaMap sea marks (Europe)</string>
+    <string name="onboarding_offline_content_vv">Finnish official sea marks</string>
     <string name="onboarding_offline_progress_status_pmtiles">Downloading seamarks… %d%%</string>
-    <string name="onboarding_offline_progress_status_vv">Downloading nav data…</string>
+    <string name="onboarding_offline_progress_status_vv">Downloading sea marks…</string>
+    <string name="onboarding_offline_open_settings">Open offline downloads</string>
+    <string name="onboarding_offline_start_using">Start using</string>
     <string name="report_bug">Report a bug</string>
     <string name="report_bug_url">https://github.com/pursiapp/pursi_android/issues</string>
 

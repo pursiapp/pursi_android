@@ -378,7 +378,6 @@ private fun CompactLayout(shared: SharedState) {
                     downloadManager = shared.downloadManager,
                     pmtilesDownloader = shared.pmtilesDownloader,
                     vvDataDownloader = shared.vvDataDownloader,
-                    tileSources = tileSources,
                     onChooseCustom = {
                         navController.navigate(Routes.Settings) {
                             popUpTo(navController.graph.findStartDestination().id) { saveState = true }
@@ -559,7 +558,6 @@ private fun ExpandedLayout(shared: SharedState, isPortrait: Boolean) {
                 downloadManager = shared.downloadManager,
                 pmtilesDownloader = shared.pmtilesDownloader,
                 vvDataDownloader = shared.vvDataDownloader,
-                tileSources = expandedTileSources,
                 onChooseCustom = { showAreaSelector = true }
             )
         }

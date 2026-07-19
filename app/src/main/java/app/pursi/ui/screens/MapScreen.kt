@@ -177,7 +177,6 @@ fun MapScreen(
     downloadManager: app.pursi.map.DownloadManager? = null,
     pmtilesDownloader: app.pursi.map.PmtilesDownloader? = null,
     vvDataDownloader: app.pursi.map.VvDataDownloader? = null,
-    tileSources: List<app.pursi.map.TileSource>? = null,
     onChooseCustom: (() -> Unit)? = null
 ) {
     val location by mapViewModel.currentLocation.collectAsStateWithLifecycle()
@@ -1389,8 +1388,7 @@ fun MapScreen(
                 onChooseCustom = {
                     dismissOnboarding()
                     onChooseCustom?.invoke()
-                },
-                tileSources = tileSources
+                }
             )
         }
 
