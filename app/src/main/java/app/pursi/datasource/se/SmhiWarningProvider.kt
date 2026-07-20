@@ -9,6 +9,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.xmlpull.v1.XmlPullParser
 import org.xmlpull.v1.XmlPullParserFactory
+import java.io.InputStream
 import java.io.StringReader
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -36,14 +37,13 @@ class SmhiWarningProvider @Inject constructor(
             val request = Request.Builder().url(rssUrl)
                 .header("User-Agent", "Pursi/1.0")
                 .build()
-            val response = client.newCall(request).execute()
-            if (!response.isSuccessful) return@withContext emptyList()
-            val body = response.body?.string() ?: return@withContext emptyList()
+            val capUrls = client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) return@use emptyList<String>()
+                val stream = response.body?.byteStream() ?: return@use emptyList()
+                parseRssForCapUrls(stream)
+            }
 
-            // Hae CAP-URL:t RSS-syötteestä
-            val capUrls = parseRssForCapUrls(body)
-
-            // Haeparsii CAP-XML jokaiselle varoitukselle (rajoitetaan max 10)
+            // Hae & parsii CAP-XML jokaiselle varoitukselle (rajoitetaan max 10)
             val warnings = capUrls.take(10).mapNotNull { capUrl ->
                 val capXml = fetchCapXml(capUrl) ?: return@mapNotNull null
                 parseCapXml(capXml, language)
@@ -54,12 +54,12 @@ class SmhiWarningProvider @Inject constructor(
         } catch (_: Exception) { emptyList() }
     }
 
-    private fun parseRssForCapUrls(rss: String): List<String> {
+    private fun parseRssForCapUrls(inputStream: InputStream): List<String> {
         val urls = mutableListOf<String>()
         try {
             val factory = XmlPullParserFactory.newInstance()
             val parser = factory.newPullParser()
-            parser.setInput(StringReader(rss))
+            parser.setInput(inputStream, "UTF-8")
 
             var eventType = parser.eventType
             var inItem = false
@@ -89,8 +89,9 @@ class SmhiWarningProvider @Inject constructor(
             val request = Request.Builder().url(url)
                 .header("User-Agent", "Pursi/1.0")
                 .build()
-            val response = client.newCall(request).execute()
-            if (response.isSuccessful) response.body?.string() else null
+            client.newCall(request).execute().use { response ->
+                if (response.isSuccessful) response.body?.string() else null
+            }
         } catch (_: Exception) { null }
     }
 
